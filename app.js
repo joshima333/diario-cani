@@ -81,6 +81,7 @@ const KINDS = {
   profilo: {
     ic: '🐾', name: 'Profilo', hidden: true,
     fields: [
+      { k: 'foto', l: 'Foto', t: 'photo' },
       { k: 'nascita', l: 'Data di nascita', t: 'date' },
       { k: 'razza', l: 'Razza', t: 'text' },
       { k: 'sesso', l: 'Sesso', t: 'select', o: ['Femmina', 'Maschio'] },
@@ -119,7 +120,12 @@ const DAY = 864e5;
 const daysBetween = (a, b) => Math.round((b - a) / DAY);
 const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
 const titleOf = r => (KINDS[r.kind].title || (() => KINDS[r.kind].name))(r.data);
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200); }
+// avviso in basso, con un'azione opzionale (es. Annulla)
+function toast(msg, action) {
+  const t = $('#toast'); t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ''}`; t.hidden = false;
+  if (action) t.querySelector('button').onclick = () => { t.hidden = true; action.fn(); };
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, action ? 4500 : 2200);
+}
 
 // ---------- dati: locale + Supabase ----------
 const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
@@ -158,75 +164,62 @@ const list = (dog, kind) => Object.values(records)
   .filter(r => !r.deleted && r.dog === dog && (kind ? r.kind === kind : r.kind !== 'profilo'))
   .sort((a, b) => toDate(b.data.date, b.data.time) - toDate(a.data.date, a.data.time));
 
+
 // ---------- stato interfaccia ----------
 let dog = LS.get('cani.dog', 'kafka'), tab = 'home', filter = '', range = 6;
 const curDog = () => DOGS.find(d => d.id === dog);
+const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
+const COLORS = { crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa' };
 const profileId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000000a' : '00000000000b');
 const profile = d => records[profileId(d)]?.data || {};
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const fmtNum = n => n.toLocaleString('it-IT', { maximumFractionDigits: 1 });
 function ageOf(d) {
   const n = profile(d).nascita; if (!n) return DOGS.find(x => x.id === d).eta;
   const b = toDate(n), t = new Date(); let y = t.getFullYear() - b.getFullYear(), m = t.getMonth() - b.getMonth();
   if (t.getDate() < b.getDate()) m--; if (m < 0) { y--; m += 12; }
-  return y ? `${y} ann${y === 1 ? 'o' : 'i'}${m ? ` e ${m} mes${m === 1 ? 'e' : 'i'}` : ''}` : `${m} mes${m === 1 ? 'e' : 'i'}`;
+  return y ? plural(y, 'anno', 'anni') + (m ? ' e ' + plural(m, 'mese', 'mesi') : '') : plural(m, 'mese', 'mesi');
 }
-function profileHTML() {
-  const p = profile(dog), bits = [p.razza, p.sesso, p.peso && p.peso + ' kg', p.microchip && 'Chip ' + p.microchip].filter(Boolean);
-  return `<div class="glass card item" data-profile style="margin-bottom:14px"><div class="ic">🐾</div>
-    <div class="tx"><b>${esc(curDog().name)} · ${esc(ageOf(dog))}</b><small>${esc(bits.join(' · ')) || 'Tocca per completare il profilo'}</small></div><div class="dt">›</div></div>`;
+function avatar(d, size = 40) {
+  const p = profile(d), name = DOGS.find(x => x.id === d).name;
+  return `<span class="av av-${d}" style="--s:${size}px">${p.foto ? `<img src="${esc(p.foto)}" alt="">` : `<b>${esc(name[0])}</b>`}</span>`;
 }
-const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
+const since = date => { const n = daysBetween(toDate(date), new Date()); return n <= 0 ? 'oggi' : n === 1 ? 'ieri' : `${n} giorni fa`; };
 
-function renderSeg() {
-  $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${d.name}</button>`).join('');
-  document.body.classList.toggle('zoe', dog === 'zoe');
-}
-
-function itemHTML(r) {
-  const k = KINDS[r.kind];
-  return `<div class="item" data-id="${r.id}"><div class="ic">${k.ic}</div>
-    <div class="tx"><b>${esc(r.kind === 'crisi' ? 'Crisi' : titleOf(r))}</b><small>${esc(k.sum(r.data)) || '&nbsp;'}</small></div>
-    <div class="dt">${esc(fmtDate(r.data.date))}${r.data.time ? '<br>' + esc(r.data.time) : ''}</div></div>`;
-}
-const listHTML = arr => `<div class="glass list">${arr.length ? arr.map(itemHTML).join('') : '<div class="empty">Ancora niente qui</div>'}</div>`;
-
-// terapia attuale = ultima voce per ogni farmaco, se non sospesa
+// stesso farmaco anche se scritto in modo diverso ("Phenoleptil" = "Phenoleptil 100 mg")
+const drugKey = f => (f || '').trim().toLowerCase().split(/\s+/)[0];
 function currentTherapy(d) {
   const seen = {}, out = [];
-  for (const r of list(d, 'terapia')) { const f = (r.data.farmaco || '').trim().toLowerCase(); if (seen[f]) continue; seen[f] = 1; if (r.data.sospeso !== 'Sospeso') out.push(r); }
+  for (const r of list(d, 'terapia')) { const k = drugKey(r.data.farmaco); if (seen[k]) continue; seen[k] = 1; if (r.data.sospeso !== 'Sospeso') out.push(r); }
   return out;
 }
 function upcoming(d) {
-  const t = today(), out = [];
-  for (const r of list(d)) {
-    const due = r.data.richiamo || r.data.prossime || r.data.prossima;
-    if (due && due >= t) out.push({ r, due });
-  }
-  // tieni solo la scadenza più recente per ogni voce con lo stesso nome
-  const seen = {};
+  const t = today(), out = [], seen = {};
+  for (const r of list(d)) { const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
   return out.sort((a, b) => a.due.localeCompare(b.due)).filter(x => { const k = x.r.kind + titleOf(x.r); return seen[k] ? false : (seen[k] = 1); });
 }
 
 // ---------- statistiche crisi ----------
+const rangeStart = (months, rs) => months ? new Date(new Date().getFullYear(), new Date().getMonth() - months + 1, 1) : (rs.length ? toDate(rs[rs.length - 1].data.date) : new Date());
 function seizureStats(d, months) {
-  const all = list(d, 'crisi');
-  const from = months ? new Date(new Date().getFullYear(), new Date().getMonth() - months + 1, 1) : (all.length ? toDate(all[all.length - 1].data.date) : new Date());
+  const all = list(d, 'crisi'), from = rangeStart(months, all);
   const rs = all.filter(r => toDate(r.data.date) >= from);
   const n = r => +r.data.quante || 1;
   const total = rs.reduce((s, r) => s + n(r), 0);
   const days = {}; rs.forEach(r => days[r.data.date] = (days[r.data.date] || 0) + n(r));
   const durs = rs.map(r => r.data.durSec).filter(Boolean);
-  const times = rs.map(r => toDate(r.data.date, r.data.time)).sort((a, b) => a - b);
-  const gaps = times.slice(1).map((t, i) => (t - times[i]) / DAY);
+  const dates = Object.keys(days).sort().map(x => toDate(x));
+  const gaps = dates.slice(1).map((t, i) => (t - dates[i]) / DAY);
   const spanMonths = Math.max(1, (Date.now() - from) / (30.44 * DAY));
   return {
-    all, rs, from, total,
-    giorni: Object.keys(days).length,
+    all, rs, from, total, giorni: dates.length,
     cluster: Object.values(days).filter(v => v >= 2).length,
     durMedia: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0,
     durMax: durs.length ? Math.max(...durs) : 0,
     gapMedio: gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0,
+    gapMax: gaps.length ? Math.max(...gaps) : 0,
     alMese: total / spanMonths,
-    last: all[0] ? toDate(all[0].data.date, all[0].data.time) : null,
+    last: all[0] || null,
   };
 }
 function monthsFrom(from) {
@@ -234,20 +227,21 @@ function monthsFrom(from) {
   while (d <= end) { out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`); d.setMonth(d.getMonth() + 1); }
   return out;
 }
+const monthLbl = (m, i) => { const d = new Date(m + '-01T12:00'), s = d.toLocaleDateString('it-IT', { month: 'short' }).replace('.', ''); return (i === 0 || d.getMonth() === 0) ? `${s} ${String(d.getFullYear()).slice(2)}` : s; };
 
-// grafico a barre SVG; marks = indici dove disegnare un segno (cambio dose)
-function barChart(items, { marks = [], color = 'var(--accent, #6c5cff)', h = 150 } = {}) {
-  const W = 320, H = h, pl = 22, pb = 22, pt = 10, n = Math.max(items.length, 1);
+// grafico a barre SVG; marks = indici dei mesi con un cambio di terapia
+function barChart(items, { marks = [], color = '#8b7bff', h = 160 } = {}) {
+  const W = 340, H = h, pl = 22, pb = 24, pt = 12, n = Math.max(items.length, 1);
   const max = Math.max(1, ...items.map(i => i.v)), bw = (W - pl) / n;
   const step = max <= 5 ? 1 : Math.ceil(max / 4);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
-  for (let y = 0; y <= max; y += step) { const yy = H - pb - (H - pb - pt) * y / max; s += `<line x1="${pl}" x2="${W}" y1="${yy}" y2="${yy}" stroke="currentColor" stroke-opacity=".1"/><text x="${pl - 4}" y="${yy + 3}" text-anchor="end">${y}</text>`; }
-  marks.forEach(i => { const x = pl + bw * i + bw / 2; s += `<line x1="${x}" x2="${x}" y1="${pt}" y2="${H - pb}" stroke="#ff7eb3" stroke-width="1.5" stroke-dasharray="3 3"/><path d="M${x - 4} ${pt - 2}h8l-4 6z" fill="#ff7eb3"/>`; });
-  const every = Math.ceil(n / 12);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img"><defs><linearGradient id="g${color.slice(1)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".55"/></linearGradient></defs>`;
+  for (let y = 0; y <= max; y += step) { const yy = H - pb - (H - pb - pt) * y / max; s += `<line x1="${pl}" x2="${W}" y1="${yy}" y2="${yy}" stroke="currentColor" stroke-opacity=".08"/><text x="${pl - 6}" y="${yy + 3}" text-anchor="end">${y}</text>`; }
+  marks.forEach(i => { const x = pl + bw * i + bw / 2; s += `<line x1="${x}" x2="${x}" y1="${pt}" y2="${H - pb}" stroke="#ff7eb3" stroke-width="1.2" stroke-dasharray="2 3"/><circle cx="${x}" cy="${pt - 3}" r="3" fill="#ff7eb3"/>`; });
+  const every = n <= 8 ? 1 : Math.ceil(n / 7);
   items.forEach((it, i) => {
-    const bh = (H - pb - pt) * it.v / max, x = pl + bw * i + bw * .18, w = bw * .64;
-    if (it.v) s += `<rect x="${x}" y="${H - pb - bh}" width="${w}" height="${bh}" rx="${Math.min(4, w / 2)}" fill="${color}"><title>${esc(it.l)}: ${it.v}</title></rect>`;
-    if (i % every === 0) s += `<text x="${x + w / 2}" y="${H - 7}" text-anchor="middle">${esc(it.l)}</text>`;
+    const bh = (H - pb - pt) * it.v / max, w = Math.max(2, bw * .62), x = pl + bw * i + (bw - w) / 2;
+    if (it.v) s += `<rect x="${x}" y="${H - pb - bh}" width="${w}" height="${bh}" rx="${Math.min(4, w / 2)}" fill="url(#g${color.slice(1)})"><title>${esc(it.t || it.l)}: ${it.v}</title></rect>`;
+    if (i % every === 0) s += `<text x="${pl + bw * i + bw / 2}" y="${H - 7}" text-anchor="middle">${esc(it.l)}</text>`;
   });
   return s + '</svg>';
 }
@@ -255,47 +249,79 @@ function seizureMonthChart(d, st) {
   const ms = monthsFrom(st.from), counts = Object.fromEntries(ms.map(m => [m, 0]));
   st.rs.forEach(r => { const m = r.data.date.slice(0, 7); if (m in counts) counts[m] += +r.data.quante || 1; });
   const marks = [...new Set(list(d, 'terapia').map(r => ms.indexOf(r.data.date.slice(0, 7))).filter(i => i >= 0))];
-  const lbl = m => new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'short' }).replace('.', '');
-  return barChart(ms.map(m => ({ l: lbl(m), v: counts[m] })), { marks });
+  return barChart(ms.map((m, i) => ({ l: monthLbl(m, i), t: new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }), v: counts[m] })), { marks, color: COLORS.crisi });
 }
 function hourChart(st) {
   const b = Array(8).fill(0);
   st.rs.forEach(r => { if (r.data.time) b[Math.floor(+r.data.time.slice(0, 2) / 3)] += +r.data.quante || 1; });
-  return barChart(b.map((v, i) => ({ l: `${i * 3}-${i * 3 + 3}`, v })), { color: '#7fbfff', h: 130 });
+  return barChart(b.map((v, i) => ({ l: `${i * 3}-${i * 3 + 3}`, t: `dalle ${i * 3} alle ${i * 3 + 3}`, v })), { color: '#3ea6ff', h: 140 });
 }
-function hbars(counts) {
-  const e = Object.entries(counts).sort((a, b) => b[1] - a[1]); if (!e.length) return '<p class="muted">Nessun dato</p>';
+function hbars(counts, color = '#8b7bff') {
+  const e = Object.entries(counts).sort((a, b) => b[1] - a[1]); if (!e.length) return '<p class="muted small">Nessun dato nel periodo</p>';
   const max = e[0][1];
-  return e.map(([k, v]) => `<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:.85rem"><span>${esc(k)}</span><b>${v}</b></div>
-    <div style="height:8px;border-radius:4px;background:var(--line)"><div style="height:100%;width:${v / max * 100}%;border-radius:4px;background:var(--accent)"></div></div></div>`).join('');
+  return e.map(([k, v]) => `<div class="hb"><div><span>${esc(k)}</span><b>${v}</b></div><i><i style="width:${v / max * 100}%;background:${color}"></i></i></div>`).join('');
 }
 const countBy = (rs, f) => rs.reduce((o, r) => { [].concat(f(r) || []).forEach(k => o[k] = (o[k] || 0) + 1); return o; }, {});
 
+// ---------- pezzi di interfaccia ----------
+const dots = n => n ? `<span class="dots" title="Intensità ${n}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>` : '';
+function itemHTML(r, { swipe = true } = {}) {
+  const k = KINDS[r.kind], d = r.data, q = +d.quante || 1;
+  const title = r.kind === 'crisi' ? `Crisi${q > 1 ? ` <span class="badge">×${q}</span>` : ''}` : esc(titleOf(r));
+  const sub = r.kind === 'crisi' ? [fmtDur(d.durSec), d.tipo && d.tipo.replace(' (tonico-clonica)', '')].filter(Boolean).join(' · ') : k.sum(d);
+  const row = `<div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${k.ic}</div>
+    <div class="tx"><b>${title}</b><small>${esc(sub) || (r.kind === 'crisi' && d.note ? esc(d.note) : '&nbsp;')}</small>${r.kind === 'crisi' ? dots(d.intensita) : ''}</div>
+    <div class="dt">${esc(fmtDate(d.date))}${d.time ? `<br><span>${esc(d.time)}</span>` : ''}</div></div>`;
+  return `<div class="item${swipe ? ' swipe' : ''}" data-id="${r.id}">${swipe ? '<div class="sdel">🗑 Elimina</div>' : ''}${row}</div>`;
+}
+const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass list">${arr.length ? arr.map(r => itemHTML(r, opt)).join('') : `<div class="empty">${empty}</div>`}</div>`;
+const section = (title, body, extra = '') => `<div class="sec"><h3>${title}</h3>${extra}</div>${body}`;
+
+function therapyCards(d) {
+  const th = currentTherapy(d);
+  if (!th.length) return `<div class="glass list"><div class="empty">Nessuna terapia in corso<br><small>Aggiungila con il tasto +</small></div></div>`;
+  return `<div class="drugs">${th.map(r => { const x = r.data; return `<div class="glass drug" data-id="${r.id}" style="--c:${COLORS.terapia}">
+    <div class="drug-h"><span class="ic" style="--c:${COLORS.terapia}">💊</span><div><b>${esc(x.farmaco || 'Farmaco')}</b><small>dal ${esc(fmtDate(x.date))}</small></div></div>
+    <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}</div></div>`; }).join('')}</div>`;
+}
+function heroCard() {
+  const d = curDog(), p = profile(dog);
+  const bits = [p.razza, p.sesso, p.peso && fmtNum(+p.peso) + ' kg'].filter(Boolean).join(' · ');
+  let right = '';
+  if (d.epi) {
+    const st = seizureStats(dog, 1);
+    const n = st.last ? Math.max(0, daysBetween(toDate(st.last.data.date), new Date())) : null;
+    right = `<div class="streak"><b>${n ?? '—'}</b><small>${n === 1 ? 'giorno' : 'giorni'} senza crisi</small></div>`;
+  }
+  return `<div class="glass hero" data-profile>
+    ${avatar(dog, 72)}
+    <div class="hero-tx"><h2>${esc(d.name)}</h2><p>${esc(ageOf(dog))}</p><small>${esc(bits) || 'Tocca per completare il profilo ›'}</small></div>${right}</div>`;
+}
+
 // ---------- viste ----------
 function viewHome() {
-  const d = curDog(); let h = profileHTML();
+  const d = curDog(); let h = heroCard();
   if (d.epi) {
-    const st = seizureStats(dog, 1), st3 = seizureStats(dog, 3);
-    const senza = st.last ? Math.max(0, daysBetween(st.last, new Date())) : '—';
+    const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3);
+    const prev = m2.total - m.total, diff = m.total - prev;
+    const trend = diff > 0 ? `<em class="up">▲ ${diff} rispetto al mese scorso</em>` : diff < 0 ? `<em class="down">▼ ${-diff} rispetto al mese scorso</em>` : `<em>come il mese scorso</em>`;
     h += `<div class="tiles">
-      <div class="glass tile"><b>${senza}</b><small>giorni senza crisi</small></div>
-      <div class="glass tile"><b>${st.total}</b><small>crisi questo mese</small></div>
-      <div class="glass tile"><b>${st3.alMese.toFixed(1)}</b><small>crisi/mese (3 mesi)</small></div>
-      <div class="glass tile"><b>${fmtDur(st3.durMedia) || '—'}</b><small>durata media</small></div>
+      <div class="glass tile"><small>Questo mese</small><b>${m.total}</b><span>${m.total === 1 ? 'crisi' : 'crisi'}</span>${trend}</div>
+      <div class="glass tile"><small>Ultimi 3 mesi</small><b>${fmtNum(q.alMese)}</b><span>crisi al mese</span><em>${plural(q.total, 'crisi', 'crisi')} in tutto</em></div>
+      <div class="glass tile"><small>Ultima crisi</small><b class="sm">${q.last || m.last ? esc(fmtDate((m.last || q.last).data.date)) : '—'}</b><span>${m.last ? since(m.last.data.date) : ''}</span></div>
+      <div class="glass tile"><small>Durata media</small><b class="sm">${fmtDur(q.durMedia) || '—'}</b><span>ultimi 3 mesi</span></div>
     </div>`;
   } else {
-    const probs = list(dog, 'salute').filter(r => r.data.risolto !== 'Risolto').length;
-    const v = list(dog, 'visita')[0];
+    const probs = list(dog, 'salute').filter(r => r.data.risolto !== 'Risolto').length, v = list(dog, 'visita')[0];
     h += `<div class="tiles">
-      <div class="glass tile"><b>${probs}</b><small>problemi in corso</small></div>
-      <div class="glass tile"><b>${v ? daysBetween(toDate(v.data.date), new Date()) : '—'}</b><small>giorni dall'ultima visita</small></div>
+      <div class="glass tile"><small>Problemi</small><b>${probs}</b><span>in corso</span></div>
+      <div class="glass tile"><small>Ultima visita</small><b class="sm">${v ? esc(fmtDate(v.data.date)) : '—'}</b><span>${v ? since(v.data.date) : ''}</span></div>
     </div>`;
   }
-  const th = currentTherapy(dog);
-  h += `<h3>Terapia attuale</h3>` + listHTML(th);
-  const up = upcoming(dog).slice(0, 5);
-  h += `<h3>In arrivo</h3><div class="glass list">${up.length ? up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="ic">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>${daysBetween(new Date(), toDate(due))} giorni</small></div><div class="dt">${esc(fmtDate(due))}</div></div>`).join('') : '<div class="empty">Nessuna scadenza</div>'}</div>`;
-  h += `<h3>Ultime voci</h3>` + listHTML(list(dog).slice(0, 6));
+  h += section('Terapia in corso', therapyCards(dog));
+  const up = upcoming(dog).slice(0, 4);
+  if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>tra ${plural(daysBetween(new Date(), toDate(due)), 'giorno', 'giorni')}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`);
+  h += section('Ultime voci', listHTML(list(dog).slice(0, 5), 'Tocca + per aggiungere la prima voce'), `<button class="link" data-goto="diario">Vedi tutto</button>`);
   return h;
 }
 
@@ -306,104 +332,134 @@ function viewDiario() {
   if (!rs.length) return h + listHTML([]);
   const groups = {};
   rs.forEach(r => (groups[r.data.date.slice(0, 7)] ||= []).push(r));
-  for (const [m, arr] of Object.entries(groups)) h += `<h3>${new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</h3>` + listHTML(arr);
-  return h;
+  for (const [m, arr] of Object.entries(groups)) {
+    const n = arr.filter(r => r.kind === 'crisi').reduce((s, r) => s + (+r.data.quante || 1), 0);
+    h += section(new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }), listHTML(arr), n ? `<span class="count">⚡ ${n}</span>` : '');
+  }
+  return h + `<p class="hint">Scorri una voce verso sinistra per eliminarla</p>`;
 }
 
 const RANGES = [[3, '3 mesi'], [6, '6 mesi'], [12, '1 anno'], [0, 'Tutto']];
-const rangePills = () => `<div class="filters">${RANGES.map(([v, l]) => `<button class="pill ${range === v ? 'on' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
+const rangePills = () => `<div class="filters seg2">${RANGES.map(([v, l]) => `<button class="pill ${range === v ? 'on' : ''}" data-range="${v}">${l}</button>`).join('')}</div>`;
+const periodText = from => `dal ${from.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })} a oggi`;
 
-function seizureStatsHTML(st) {
+function statTiles(st) {
+  const t = (v, l, s = '') => `<div class="glass tile"><small>${l}</small><b class="${String(v).length > 5 ? 'sm' : ''}">${v}</b>${s ? `<span>${s}</span>` : ''}</div>`;
   return `<div class="tiles">
-    <div class="glass tile"><b>${st.total}</b><small>crisi totali</small></div>
-    <div class="glass tile"><b>${st.alMese.toFixed(1)}</b><small>media al mese</small></div>
-    <div class="glass tile"><b>${st.giorni}</b><small>giorni con crisi</small></div>
-    <div class="glass tile"><b>${st.cluster}</b><small>giorni con 2+ crisi (cluster)</small></div>
-    <div class="glass tile"><b>${st.gapMedio ? st.gapMedio.toFixed(1) : '—'}</b><small>giorni medi tra crisi</small></div>
-    <div class="glass tile"><b>${fmtDur(st.durMedia) || '—'}</b><small>durata media (max ${fmtDur(st.durMax) || '—'})</small></div>
+    ${t(st.total, 'Crisi totali', `in ${plural(st.giorni, 'giorno', 'giorni')} diversi`)}
+    ${t(fmtNum(st.alMese), 'Media mensile', 'crisi al mese')}
+    ${t(st.gapMedio ? Math.round(st.gapMedio) : '—', 'Pausa media', st.gapMax ? `giorni tra due crisi (max ${Math.round(st.gapMax)})` : 'giorni tra due crisi')}
+    ${t(st.cluster, 'Giorni a grappolo', 'con 2 o più crisi')}
+    ${t(fmtDur(st.durMedia) || '—', 'Durata media', st.durMax ? `la più lunga ${fmtDur(st.durMax)}` : 'non annotata')}
+    ${t(st.last ? since(st.last.data.date) : '—', 'Ultima crisi', st.last ? fmtDate(st.last.data.date) : '')}
   </div>`;
 }
+const chartCard = (title, sub, svg, legend = '') => `<div class="glass card chart"><div class="card-h"><h2>${title}</h2>${sub ? `<small>${sub}</small>` : ''}</div>${svg}${legend}</div>`;
+const monthLegend = `<div class="legend"><span><i style="background:${COLORS.crisi}"></i>Numero di crisi</span><span><i class="dash"></i>Cambio di terapia</span></div>`;
 
 function viewStats() {
   const d = curDog(); let h = rangePills();
   if (d.epi) {
     const st = seizureStats(dog, range);
-    h += seizureStatsHTML(st);
-    h += `<div class="glass card chart"><h2>Crisi per mese</h2>${seizureMonthChart(dog, st)}
-      <div class="legend"><span><i style="background:var(--accent)"></i>Crisi</span><span><i style="background:#ff7eb3"></i>Cambio terapia</span></div></div>`;
-    h += `<div class="glass card chart"><h2>A che ora</h2>${hourChart(st)}</div>`;
-    h += `<div class="glass card"><h2>Tipo di crisi</h2>${hbars(countBy(st.rs, r => r.data.tipo))}</div>`;
-    h += `<div class="glass card"><h2>Possibili cause</h2>${hbars(countBy(st.rs, r => r.data.trigger))}</div>`;
-    h += `<div class="glass card"><h2>Sintomi più frequenti</h2>${hbars(countBy(st.rs, r => r.data.sintomi))}</div>`;
+    h += `<p class="period">${periodText(st.from)}</p>` + statTiles(st);
+    h += chartCard('Crisi per mese', 'Ogni barra è un mese', seizureMonthChart(dog, st), monthLegend);
+    h += chartCard('A che ora succedono', 'Numero di crisi per fascia oraria', hourChart(st));
+    h += `<div class="glass card"><h2>Com'erano</h2>${hbars(countBy(st.rs, r => r.data.sintomi), COLORS.crisi)}</div>`;
+    h += `<div class="glass card"><h2>Possibili cause</h2>${hbars(countBy(st.rs, r => r.data.trigger), COLORS.salute)}</div>`;
   }
-  // per tutti: problemi per mese e conteggi
-  const from = range ? new Date(new Date().getFullYear(), new Date().getMonth() - range + 1, 1) : (list(dog).length ? toDate(list(dog).at(-1).data.date) : new Date());
-  const rs = list(dog).filter(r => toDate(r.data.date) >= from);
+  const all = list(dog), from = rangeStart(range, all), rs = all.filter(r => toDate(r.data.date) >= from);
+  if (!d.epi) h += `<p class="period">${periodText(from)}</p>`;
   const ms = monthsFrom(from), c = Object.fromEntries(ms.map(m => [m, 0]));
   rs.filter(r => r.kind === 'salute').forEach(r => { const m = r.data.date.slice(0, 7); if (m in c) c[m]++; });
-  h += `<div class="glass card chart"><h2>Problemi di salute per mese</h2>${barChart(ms.map(m => ({ l: new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'short' }).replace('.', ''), v: c[m] })), { color: '#ffb86b', h: 130 })}</div>`;
-  h += `<div class="glass card"><h2>Voci nel periodo</h2>${hbars(countBy(rs, r => KINDS[r.kind].name))}</div>`;
+  if (!d.epi || rs.some(r => r.kind === 'salute')) h += chartCard('Problemi di salute', 'Per mese', barChart(ms.map((m, i) => ({ l: monthLbl(m, i), v: c[m] })), { color: COLORS.salute, h: 140 }));
   const pesi = list(dog, 'visita').filter(r => r.data.peso).slice(0, 6);
-  if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">${esc(fmtDate(r.data.date))}</span><b>${esc(r.data.peso)} kg</b></div>`).join('')}</div>`;
+  if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div class="kv"><span>${esc(fmtDate(r.data.date))}</span><b>${esc(fmtNum(+r.data.peso))} kg</b></div>`).join('')}</div>`;
+  h += `<div class="glass card"><h2>Voci registrate</h2>${hbars(countBy(rs, r => KINDS[r.kind].name))}</div>`;
   return h;
 }
 
-// ---------- report per il veterinario (in app e PDF) ----------
+// ---------- veterinario: in app (leggibile) e PDF (tabelle) ----------
+function vetSummary(st) {
+  if (!st.total) return '<p>Nessuna crisi nel periodo. 🎉</p>';
+  const L = [
+    `<b>${plural(st.total, 'crisi', 'crisi')}</b> in ${plural(st.giorni, 'giorno', 'giorni')} diversi, in media <b>${fmtNum(st.alMese)} al mese</b>.`,
+    st.cluster ? `In <b>${plural(st.cluster, 'giorno', 'giorni')}</b> ci sono state 2 o più crisi (a grappolo).` : 'Nessun giorno con crisi a grappolo.',
+    st.gapMedio ? `Tra una crisi e l'altra passano in media <b>${plural(Math.round(st.gapMedio), 'giorno', 'giorni')}</b> (pausa più lunga: ${Math.round(st.gapMax)}).` : '',
+    st.durMedia ? `Durata media <b>${fmtDur(st.durMedia)}</b>, la più lunga ${fmtDur(st.durMax)}.` : '',
+    st.last ? `Ultima crisi: <b>${esc(fmtDate(st.last.data.date))}${st.last.data.time ? ' alle ' + esc(st.last.data.time) : ''}</b>.` : '',
+  ];
+  return `<ul class="summary">${L.filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul>`;
+}
+function timeline(rs) {
+  if (!rs.length) return `<div class="glass list"><div class="empty">Nessuna voce</div></div>`;
+  return `<div class="glass tl">${rs.map(r => { const x = r.data, stop = x.sospeso === 'Sospeso'; return `<div class="tl-i${stop ? ' stop' : ''}" data-id="${r.id}">
+    <div class="tl-d">${esc(fmtDate(x.date))}</div><div class="tl-b"><b>${esc(x.farmaco || '')}</b>
+    <small>${stop ? 'Sospeso' : esc([x.dose && `${x.dose} ${x.unita || ''}`, x.freq, x.orari].filter(Boolean).join(' · '))}</small>
+    ${x.motivo || x.note ? `<p>${esc([x.motivo, x.note].filter(Boolean).join(' — '))}</p>` : ''}</div></div>`; }).join('')}</div>`;
+}
+function viewVet() {
+  const d = curDog(), all = list(dog), from = rangeStart(range, d.epi ? list(dog, 'crisi') : all);
+  const inR = rs => rs.filter(r => toDate(r.data.date) >= from);
+  let h = `<div class="glass card actions"><p>Mostra questa pagina al veterinario, oppure invia:</p>
+    <div class="row"><button class="btn primary" id="pdf">📄 PDF</button><button class="btn" id="csv">📊 Excel (CSV)</button></div></div>`;
+  h += rangePills() + `<p class="period">${periodText(from)}</p>`;
+  if (d.epi) {
+    const st = seizureStats(dog, range);
+    h += `<div class="glass card"><h2>In sintesi</h2>${vetSummary(st)}</div>`;
+    h += chartCard('Crisi per mese', '', seizureMonthChart(dog, st), monthLegend);
+  }
+  h += section('Terapia in corso', therapyCards(dog));
+  h += section('Storia della terapia', timeline(list(dog, 'terapia')));
+  if (d.epi) h += section('Crisi', listHTML(inR(list(dog, 'crisi')), 'Nessuna crisi nel periodo', { swipe: false }));
+  for (const k of ['analisi', 'visita', 'salute', 'vaccino']) {
+    const rs = k === 'vaccino' ? list(dog, k) : inR(list(dog, k));
+    if (rs.length) h += section(KINDS[k].name, listHTML(rs, '', { swipe: false }));
+  }
+  h += section('I tuoi dati', `<div class="glass card"><p class="muted small">Il backup salva tutti i dati di Kafka e Zoe in un file. Con "Importa" puoi ricaricarlo o aggiungere voci da un file.</p>
+    <div class="row"><button class="btn" id="backup">💾 Backup</button><button class="btn" id="import">📥 Importa</button></div></div>`);
+  return h;
+}
+
+// report stampabile (PDF)
 function table(rs, cols) {
-  if (!rs.length) return '<p class="muted">Nessuna voce</p>';
+  if (!rs.length) return '<p>Nessuna voce</p>';
   return `<table><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr>${rs.map(r => `<tr>${cols.map(c => `<td>${esc(c[1](r.data))}</td>`).join('')}</tr>`).join('')}</table>`;
 }
 const arr = v => [].concat(v || []).join(', ');
 function reportHTML() {
-  const d = curDog(), from = range ? new Date(new Date().getFullYear(), new Date().getMonth() - range + 1, 1) : new Date(0);
+  const d = curDog(), p = profile(dog), from = rangeStart(range, d.epi ? list(dog, 'crisi') : list(dog));
   const inR = rs => rs.filter(r => toDate(r.data.date) >= from);
-  const p = profile(dog), info = [p.razza, p.sesso, p.sterilizzata === 'Sì' && 'sterilizzata', p.nascita && 'nata il ' + fmtDate(p.nascita), p.peso && p.peso + ' kg', p.microchip && 'microchip ' + p.microchip].filter(Boolean).join(' · ');
-  let h = `<section><h1>${esc(d.name)} — ${esc(ageOf(dog))}</h1>${info ? `<p>${esc(info)}</p>` : ''}${p.note ? `<p>${esc(p.note)}</p>` : ''}<p class="muted">Report dal ${range ? from.toLocaleDateString('it-IT') : 'primo dato'} al ${new Date().toLocaleDateString('it-IT')}</p></section>`;
+  const info = [p.razza, p.sesso, p.sterilizzata === 'Sì' && 'sterilizzata', p.nascita && 'nata il ' + fmtDate(p.nascita), p.peso && p.peso + ' kg', p.microchip && 'microchip ' + p.microchip].filter(Boolean).join(' · ');
+  let h = `<section class="rep-h">${p.foto ? `<img src="${esc(p.foto)}" alt="">` : ''}<div><h1>${esc(d.name)} — ${esc(ageOf(dog))}</h1>${info ? `<p>${esc(info)}</p>` : ''}${p.note ? `<p>${esc(p.note)}</p>` : ''}<p class="muted">Report ${periodText(from)}</p></div></section>`;
   if (d.epi) {
     const st = seizureStats(dog, range);
-    h += `<section><h2>Riepilogo crisi</h2><table>
-      <tr><td>Crisi totali</td><td><b>${st.total}</b></td><td>Media al mese</td><td><b>${st.alMese.toFixed(1)}</b></td></tr>
-      <tr><td>Giorni con crisi</td><td><b>${st.giorni}</b></td><td>Giorni con cluster (2+)</td><td><b>${st.cluster}</b></td></tr>
-      <tr><td>Intervallo medio</td><td><b>${st.gapMedio ? st.gapMedio.toFixed(1) + ' gg' : '—'}</b></td><td>Durata media / max</td><td><b>${fmtDur(st.durMedia) || '—'} / ${fmtDur(st.durMax) || '—'}</b></td></tr>
-      <tr><td>Ultima crisi</td><td colspan="3"><b>${st.last ? st.last.toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</b></td></tr></table></section>`;
-    h += `<section class="chart"><h2>Crisi per mese</h2>${seizureMonthChart(dog, st)}<p class="muted" style="font-size:.8em">Linea rosa tratteggiata = cambio di terapia</p></section>`;
+    h += `<section><h2>Sintesi crisi</h2>${vetSummary(st)}</section>`;
+    h += `<section class="chart"><h2>Crisi per mese</h2>${seizureMonthChart(dog, st)}<p class="muted">Pallino rosa = cambio di terapia</p></section>`;
   }
-  h += `<section><h2>Terapia attuale</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
-  h += `<section><h2>Storico terapia e cambi di dose</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Motivo', x => x.motivo]])}</section>`;
-  if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Tipo', x => x.tipo], ['Int.', x => x.intensita ? x.intensita + '/5' : ''], ['Post', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Causa', x => arr(x.trigger)], ['Emerg.', x => x.emergenza], ['Note', x => x.note]])}</section>`;
+  h += `<section><h2>Terapia in corso</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
+  h += `<section><h2>Storia della terapia</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Note', x => [x.motivo, x.note].filter(Boolean).join(' — ')]])}</section>`;
+  if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Intensità', x => x.intensita ? x.intensita + '/5' : ''], ['Ripresa', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Farmaco emergenza', x => x.emergenza], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Analisi</h2>${table(inR(list(dog, 'analisi')), [['Giorno', x => fmtDate(x.date)], ['Tipo', x => x.tipo], ['Valore', x => x.valore], ['Esito', x => x.esito], ['Risultati', x => x.risultati]])}</section>`;
-  h += `<section><h2>Problemi di salute</h2>${table(inR(list(dog, 'salute')), [['Giorno', x => fmtDate(x.date)], ['Cosa', x => x.titolo], ['Gravità', x => x.gravita ? x.gravita + '/5' : ''], ['Farmaco', x => x.farmaco], ['Stato', x => x.risolto], ['Note', x => x.note]])}</section>`;
+  h += `<section><h2>Problemi di salute</h2>${table(inR(list(dog, 'salute')), [['Giorno', x => fmtDate(x.date)], ['Cosa', x => x.titolo], ['Farmaco', x => x.farmaco], ['Stato', x => x.risolto], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Visite</h2>${table(inR(list(dog, 'visita')), [['Giorno', x => fmtDate(x.date)], ['Motivo', x => x.motivo], ['Peso', x => x.peso ? x.peso + ' kg' : ''], ['Esito', x => x.esito]])}</section>`;
   h += `<section><h2>Vaccini e antiparassitari</h2>${table(list(dog, 'vaccino'), [['Giorno', x => fmtDate(x.date)], ['Cosa', x => x.nome], ['Richiamo', x => fmtDate(x.richiamo)], ['Note', x => x.note]])}</section>`;
   return h;
 }
-function viewVet() {
-  return rangePills() + `<div class="row" style="margin:0 0 14px"><button class="btn primary" id="pdf">📄 Esporta PDF</button><button class="btn" id="csv">📊 Esporta CSV</button></div>
-    <div class="row" style="margin:0 0 14px"><button class="btn" id="backup">💾 Backup</button><button class="btn" id="import">📥 Importa</button></div>
-    <div class="glass card report">${reportHTML()}</div>`;
-}
 
-function exportPDF() {
-  $('#print').innerHTML = reportHTML();
-  setTimeout(() => window.print(), 50);
-}
-function exportCSV() {
-  const rs = list(dog), cols = [['tipo', 'Tipo'], ['date', 'Giorno'], ['time', 'Ora']];
-  for (const [, k] of Object.entries(KINDS)) for (const f of k.fields) if (!cols.some(c => c[0] === (f.t === 'dur' ? 'durSec' : f.k))) cols.push(f.t === 'dur' ? ['durSec', 'Durata (sec)'] : [f.k, f.l]);
-  const cell = v => { const s = Array.isArray(v) ? v.join(', ') : String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const lines = [cols.map(c => cell(c[1])).join(';'), ...rs.map(r => cols.map(c => cell(c[0] === 'tipo' ? KINDS[r.kind].name : r.data[c[0]])).join(';'))];
-  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const name = `${curDog().name}-${today()}.csv`, file = new File([blob], name, { type: 'text/csv' });
-  if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-// backup di tutti e due i cani; lo stesso formato si reimporta con "Importa"
+function exportPDF() { $('#print').innerHTML = reportHTML(); setTimeout(() => window.print(), 50); }
 function shareFile(blob, name) {
   const file = new File([blob], name, { type: blob.type });
   if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+function exportCSV() {
+  const rs = list(dog), cols = [['tipo', 'Tipo'], ['date', 'Giorno'], ['time', 'Ora']];
+  for (const k of Object.values(KINDS)) if (!k.hidden) for (const f of k.fields) if (!cols.some(c => c[0] === (f.t === 'dur' ? 'durSec' : f.k))) cols.push(f.t === 'dur' ? ['durSec', 'Durata (sec)'] : [f.k, f.l]);
+  const cell = v => { const s = Array.isArray(v) ? v.join(', ') : String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const lines = [cols.map(c => cell(c[1])).join(';'), ...rs.map(r => cols.map(c => cell(c[0] === 'tipo' ? KINDS[r.kind].name : r.data[c[0]])).join(';'))];
+  shareFile(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${curDog().name}-${today()}.csv`);
+}
+// backup di tutti e due i cani; lo stesso formato si reimporta con "Importa"
 function exportBackup() {
   const rs = Object.values(records).filter(r => !r.deleted).map(({ id, dog, kind, data }) => ({ id, dog, kind, data }));
   shareFile(new Blob([JSON.stringify({ app: 'diario-cani', records: rs }, null, 1)], { type: 'application/json' }), `diario-cani-${today()}.json`);
@@ -411,7 +467,7 @@ function exportBackup() {
 async function importFile(file) {
   let rs;
   try { const j = JSON.parse(await file.text()); rs = Array.isArray(j) ? j : j.records; } catch { return toast('File non valido'); }
-  rs = (rs || []).filter(r => r && KINDS[r.kind] && DOGS.some(d => d.id === r.dog) && r.data?.date || r?.kind === 'profilo');
+  rs = (rs || []).filter(r => r && KINDS[r.kind] && DOGS.some(d => d.id === r.dog) && r.data && (r.data.date || r.kind === 'profilo'));
   if (!rs.length) return toast('Nessuna voce da importare');
   const nuove = rs.filter(r => !r.id || !records[r.id] || records[r.id].deleted).length;
   if (!confirm(`Importare ${rs.length} voci (${nuove} nuove, ${rs.length - nuove} aggiornate)?`)) return;
@@ -422,13 +478,54 @@ async function importFile(file) {
 $('#importFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importFile(f); };
 
 // ---------- render ----------
-const TITLES = { home: d => d.name, diario: () => 'Diario', stats: () => 'Statistiche', vet: () => 'Per il veterinario' };
+const TITLES = { home: () => 'Riepilogo', diario: () => 'Diario', stats: () => 'Statistiche', vet: () => 'Veterinario' };
 function render() {
   if ($('#app').hidden) return;
-  renderSeg();
-  $('#title').textContent = TITLES[tab](curDog());
+  closeSwipe(true);
+  $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${avatar(d.id, 26)}<span>${d.name}</span></button>`).join('');
+  document.body.classList.toggle('zoe', dog === 'zoe');
+  $('#title').textContent = TITLES[tab]();
   $('#view').innerHTML = { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
   document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+}
+
+// ---------- scorri a sinistra per eliminare (come nell'app Note) ----------
+const BTN_W = 96, FULL = .5;
+let sw = null, openSw = null, justSwiped = 0;
+function setX(el, x, anim) {
+  const sc = el.querySelector('.sc'), del = el.querySelector('.sdel');
+  sc.style.transition = del.style.transition = anim ? 'transform .25s ease, width .25s ease' : 'none';
+  x = Math.min(0, x); sc.style.transform = `translateX(${x}px)`; del.style.width = `${-x}px`;
+  el.classList.toggle('full', -x > el.offsetWidth * FULL);
+}
+function closeSwipe(noAnim) { if (openSw) setX(openSw, 0, !noAnim); openSw = null; }
+const view = $('#view');
+view.addEventListener('touchstart', e => {
+  const el = e.target.closest('.item.swipe'); if (!el) return;
+  if (openSw && openSw !== el) closeSwipe();
+  const t = e.touches[0]; sw = { el, x0: t.clientX, y0: t.clientY, base: openSw === el ? -BTN_W : 0, dir: null, dx: 0 };
+}, { passive: true });
+view.addEventListener('touchmove', e => {
+  if (!sw) return;
+  const t = e.touches[0], dx = t.clientX - sw.x0, dy = t.clientY - sw.y0;
+  if (!sw.dir && Math.abs(dx) + Math.abs(dy) > 8) sw.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+  if (sw.dir !== 'h') return;
+  e.preventDefault(); sw.dx = sw.base + dx; setX(sw.el, sw.dx);
+}, { passive: false });
+function endSwipe() {
+  if (!sw || sw.dir !== 'h') { sw = null; return; }
+  const { el, dx } = sw; sw = null; justSwiped = Date.now();
+  if (-dx > el.offsetWidth * FULL) return removeWithUndo(el);
+  if (-dx > BTN_W / 2) { setX(el, -BTN_W, true); openSw = el; } else { setX(el, 0, true); openSw = null; }
+}
+view.addEventListener('touchend', endSwipe); view.addEventListener('touchcancel', endSwipe);
+function removeWithUndo(el) {
+  const r = records[el.dataset.id]; if (!r) return;
+  openSw = null;
+  el.style.transition = 'height .25s ease, opacity .25s ease'; el.style.height = el.offsetHeight + 'px';
+  requestAnimationFrame(() => { el.style.height = '0px'; el.style.opacity = '0'; });
+  setTimeout(() => { r.deleted = true; save(r); }, 260);
+  toast('Voce eliminata', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } });
 }
 
 // ---------- modulo ----------
@@ -443,25 +540,43 @@ function fieldHTML(f, d) {
     case 'area': return lab + `<textarea name="${f.k}">${esc(v)}</textarea>`;
     case 'select': return lab + `<select name="${f.k}"><option value=""></option>${f.o.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     case 'chips': return lab + `<div class="chips">${f.o.map(o => `<label><input type="checkbox" name="${f.k}" value="${esc(o)}"${[].concat(v).includes(o) ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
-    case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
-    case 'dur': { const s = +d.durSec || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="durMin" placeholder="min" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="durS" placeholder="sec" value="${s ? s % 60 : ''}"></div>`; }
+    case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><div class="stars-l"><span>lieve</span><span>molto forte</span></div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
+    case 'dur': { const s = +d.durSec || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="durMin" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="durS" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
+    case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
 }
-function suggestions(k) {
-  return [...new Set(Object.values(records).filter(r => !r.deleted).map(r => r.data[k]).filter(Boolean))].slice(0, 30);
+function suggestions(k) { return [...new Set(Object.values(records).filter(r => !r.deleted).map(r => r.data[k]).filter(Boolean))].slice(0, 30); }
+// rimpicciolisce la foto (quadrata, 320px) per salvarla leggera
+function shrinkPhoto(file) {
+  return new Promise((ok, ko) => {
+    const img = new Image(); img.onerror = ko;
+    img.onload = () => {
+      const s = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = 320;
+      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 320, 320);
+      URL.revokeObjectURL(img.src); ok(c.toDataURL('image/jpeg', .82));
+    };
+    img.src = URL.createObjectURL(file);
+  });
 }
 function openForm(kind, rec) {
   editing = rec ? structuredClone(rec) : { id: uuid(), dog, kind, data: { date: today(), time: KINDS[kind].fields.some(f => f.k === 'time') ? nowTime() : undefined } };
   const k = KINDS[kind];
-  $('#fTitle').textContent = `${k.ic} ${k.name} · ${curDog().name}`;
+  $('#fTitle').innerHTML = `<span class="ic" style="--c:${COLORS[kind]}">${k.ic}</span> ${esc(kind === 'profilo' ? 'Profilo di ' + curDog().name : k.name)}`;
   $('#fBody').innerHTML = k.fields.map(f => fieldHTML(f, editing.data)).join('');
-  $('#fDel').hidden = !rec || kind === 'profilo';
+  $('#fDel').hidden = !rec || kind === 'profilo' || !records[rec.id];
   $('#form').showModal();
 }
 $('#fBody').addEventListener('click', e => {
   const b = e.target.closest('.stars button'); if (!b) return;
-  const wrap = b.parentElement, inp = wrap.nextElementSibling, v = b.dataset.v === inp.value ? '' : b.dataset.v;
+  const wrap = b.parentElement, inp = wrap.parentElement.querySelector(`input[name="${wrap.dataset.k}"]`), v = b.dataset.v === inp.value ? '' : b.dataset.v;
   inp.value = v; wrap.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
+});
+$('#fBody').addEventListener('change', async e => {
+  if (!e.target.matches('[data-photo]') || !e.target.files[0]) return;
+  try {
+    const url = await shrinkPhoto(e.target.files[0]), box = e.target.closest('.photo-pick');
+    box.querySelector('input[type=hidden]').value = url; box.querySelector('.ph').firstElementChild.outerHTML = `<img src="${url}" alt="">`;
+  } catch { toast('Foto non leggibile'); }
 });
 $('#frm').addEventListener('submit', e => {
   e.preventDefault();
@@ -473,33 +588,40 @@ $('#frm').addEventListener('submit', e => {
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
   }
   if (!data.date && editing.kind !== 'profilo') return toast('Inserisci il giorno');
-  editing.data = data; save(editing); $('#form').close(); toast('Salvato');
+  editing.data = data; save(editing); $('#form').close(); toast('Salvato ✓');
 });
 $('#fDel').onclick = () => {
-  if (!confirm('Eliminare questa voce?')) return;
-  editing.deleted = true; save(editing); $('#form').close(); toast('Eliminato');
+  const r = editing; $('#form').close(); r.deleted = true; save(r);
+  toast('Voce eliminata', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } });
 };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
 document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
 
 // ---------- eventi ----------
 $('#fab').onclick = () => {
-  $('#pickList').innerHTML = kindsFor(curDog()).map(([id, k]) => `<button data-kind="${id}"><span>${k.ic}</span>${k.name}</button>`).join('');
+  $('#pickList').innerHTML = kindsFor(curDog()).map(([id, k]) => `<button data-kind="${id}" style="--c:${COLORS[id]}"><span class="ic">${k.ic}</span>${k.name}</button>`).join('');
+  $('#pickTitle').innerHTML = `${avatar(dog, 28)} Cosa segni per ${esc(curDog().name)}?`;
   $('#pick').showModal();
 };
 $('#pickList').addEventListener('click', e => { const b = e.target.closest('[data-kind]'); if (!b) return; $('#pick').close(); openForm(b.dataset.kind); });
-$('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-dog]'); if (!b) return; dog = b.dataset.dog; LS.set('cani.dog', dog); filter = ''; render(); });
+$('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-dog]'); if (!b || b.dataset.dog === dog) return; dog = b.dataset.dog; LS.set('cani.dog', dog); filter = ''; render(); });
 $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); scrollTo(0, 0); });
-$('#view').addEventListener('click', e => {
-  const it = e.target.closest('[data-id]'); if (it) { const r = records[it.dataset.id]; return openForm(r.kind, r); }
+view.addEventListener('click', e => {
+  if (Date.now() - justSwiped < 400) return;
+  if (e.target.closest('.sdel')) return removeWithUndo(e.target.closest('.item'));
+  if (openSw) return closeSwipe();
+  if (e.target.closest('[data-profile]')) return openForm('profilo', records[profileId(dog)] || { id: profileId(dog), dog, kind: 'profilo', data: {} });
+  const it = e.target.closest('[data-id]'); if (it) { const r = records[it.dataset.id]; return r && openForm(r.kind, r); }
+  const g = e.target.closest('[data-goto]'); if (g) { tab = g.dataset.goto; render(); return scrollTo(0, 0); }
   const f = e.target.closest('[data-filter]'); if (f) { filter = f.dataset.filter; return render(); }
   const rg = e.target.closest('[data-range]'); if (rg) { range = +rg.dataset.range; return render(); }
-  if (e.target.id === 'pdf') return exportPDF();
-  if (e.target.id === 'csv') return exportCSV();
-  if (e.target.id === 'backup') return exportBackup();
-  if (e.target.id === 'import') return $('#importFile').click();
-  if (e.target.closest('[data-profile]')) return openForm('profilo', records[profileId(dog)] || { id: profileId(dog), dog, kind: 'profilo', data: {} });
+  const id = e.target.closest('button')?.id;
+  if (id === 'pdf') return exportPDF();
+  if (id === 'csv') return exportCSV();
+  if (id === 'backup') return exportBackup();
+  if (id === 'import') return $('#importFile').click();
 });
+addEventListener('scroll', () => document.body.classList.toggle('scrolled', scrollY > 8), { passive: true });
 addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 
