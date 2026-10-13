@@ -20,7 +20,8 @@ const KINDS = {
       { k: 'post', l: 'Fase post-crisi (minuti)', t: 'num' },
       { k: 'sintomi', l: 'Com\'è stata', t: 'chips', o: SINTOMI },
       { k: 'trigger', l: 'Possibile causa', t: 'chips', o: TRIGGER },
-      { k: 'emergenza', l: 'Farmaco d\'emergenza dato', t: 'text', ph: 'es. diazepam rettale 10 mg' },
+      { k: 'emergenza', l: 'Farmaco d\'emergenza dato', t: 'text', ph: 'es. Ziepam 1 mg' },
+      { k: 'video', l: 'Video', t: 'select', o: ['Sì, nella galleria', 'No'] },
       { k: 'note', l: 'Note', t: 'area' },
     ],
     sum: d => [d.quante > 1 ? d.quante + ' crisi' : '', fmtDur(d.durSec), d.tipo].filter(Boolean).join(' · '),
@@ -50,6 +51,7 @@ const KINDS = {
       { k: 'esito', l: 'Esito', t: 'select', o: ['Nella norma', 'Da controllare', 'Alterato'] },
       { k: 'risultati', l: 'Risultati / valori fuori norma', t: 'area' },
       { k: 'prossime', l: 'Prossime analisi', t: 'date' },
+      { k: 'docs', l: 'Foto del referto', t: 'docs' },
     ],
     title: d => d.tipo || 'Analisi',
     sum: d => [d.valore, d.esito].filter(Boolean).join(' · '),
@@ -74,6 +76,7 @@ const KINDS = {
       { k: 'farmaco', l: 'Farmaco dato', t: 'text' },
       { k: 'risolto', l: 'Stato', t: 'select', o: ['In corso', 'Risolto'] },
       { k: 'note', l: 'Note', t: 'area' },
+      { k: 'docs', l: 'Foto (ricette, referti…)', t: 'docs' },
     ],
     title: d => d.titolo || 'Problema',
     sum: d => [d.farmaco, d.risolto].filter(Boolean).join(' · '),
@@ -93,6 +96,12 @@ const KINDS = {
     ],
     sum: () => '',
   },
+  programma: {
+    ic: '⏰', name: 'Orari delle pastiglie', hidden: true,
+    fields: [{ k: 'slots', l: 'Una riga per pastiglia: ora e cosa', t: 'area', ph: '08:00 Phenoleptil 3/4\n20:00 Libromide 1/2\n23:00 Phenoleptil 3/4' }],
+    sum: () => '',
+  },
+  dose: { ic: '✅', name: 'Pastiglia data', hidden: true, fields: [], sum: d => d.slot || '' },
   visita: {
     ic: '🩺', name: 'Visita veterinaria',
     fields: [
@@ -101,6 +110,7 @@ const KINDS = {
       { k: 'peso', l: 'Peso (kg)', t: 'num', step: '0.1' },
       { k: 'esito', l: 'Cosa ha detto il veterinario', t: 'area' },
       { k: 'prossima', l: 'Prossima visita', t: 'date' },
+      { k: 'docs', l: 'Foto (ricette, libretto…)', t: 'docs' },
     ],
     title: d => d.motivo || 'Visita',
     sum: d => [d.peso && d.peso + ' kg', d.prossima && 'Prossima ' + fmtDate(d.prossima)].filter(Boolean).join(' · '),
@@ -133,21 +143,21 @@ let records = LS.get('cani.records', {});
 let pending = new Set(LS.get('cani.pending', []));
 const C = window.CONFIG || {};
 const sb = C.supabaseUrl && window.supabase ? supabase.createClient(C.supabaseUrl, C.supabaseKey) : null;
-let user = null;
+let user = null, ownerId = null, readonly = false;
 
-function persist() { LS.set('cani.records', records); LS.set('cani.pending', [...pending]); }
+function persist() { if (readonly) return; LS.set('cani.records', records); LS.set('cani.pending', [...pending]); }
 function setSync(state) { const s = $('#sync'); s.className = 'sync ' + state; s.title = { '': 'Sincronizzato', busy: 'Sincronizzo…', off: 'Non sincronizzato: riprovo appena c\'è rete' }[state]; }
 
 async function pull() {
-  if (!sb || !user) return;
+  if (!sb || !user || readonly) return;
   const { data, error } = await sb.from('pet_records').select('*');
   if (error) throw error;
   for (const r of data) if (!records[r.id] || r.updated > records[r.id].updated) records[r.id] = { id: r.id, dog: r.dog, kind: r.kind, data: r.data, deleted: r.deleted, updated: r.updated };
   persist();
 }
 async function push() {
-  if (!sb || !user || !pending.size) return;
-  const rows = [...pending].map(id => records[id]).filter(Boolean).map(r => ({ id: r.id, dog: r.dog, kind: r.kind, data: r.data, deleted: !!r.deleted, updated: r.updated }));
+  if (!sb || !user || readonly || !pending.size) return;
+  const rows = [...pending].map(id => records[id]).filter(Boolean).map(r => ({ id: r.id, user_id: ownerId || user.id, dog: r.dog, kind: r.kind, data: r.data, deleted: !!r.deleted, updated: r.updated }));
   const { error } = await sb.from('pet_records').upsert(rows);
   if (error) throw error;
   rows.forEach(r => pending.delete(r.id)); persist();
@@ -161,7 +171,7 @@ function save(rec) {
   rec.updated = Date.now(); records[rec.id] = rec; pending.add(rec.id); persist(); render(); sync();
 }
 const list = (dog, kind) => Object.values(records)
-  .filter(r => !r.deleted && r.dog === dog && (kind ? r.kind === kind : r.kind !== 'profilo'))
+  .filter(r => !r.deleted && r.dog === dog && (kind ? r.kind === kind : !KINDS[r.kind]?.hidden))
   .sort((a, b) => toDate(b.data.date, b.data.time) - toDate(a.data.date, a.data.time));
 
 
@@ -265,9 +275,10 @@ const countBy = (rs, f) => rs.reduce((o, r) => { [].concat(f(r) || []).forEach(k
 
 // ---------- pezzi di interfaccia ----------
 const dots = n => n ? `<span class="dots" title="Intensità ${n}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>` : '';
-function itemHTML(r, { swipe = true } = {}) {
+function itemHTML(r, { swipe = !readonly } = {}) {
   const k = KINDS[r.kind], d = r.data, q = +d.quante || 1;
-  const title = r.kind === 'crisi' ? `Crisi${q > 1 ? ` <span class="badge">×${q}</span>` : ''}` : esc(titleOf(r));
+  const extra = (d.docs?.length ? ' <span class="clip">📎</span>' : '') + (d.video?.startsWith('Sì') ? ' <span class="clip">📹</span>' : '');
+  const title = (r.kind === 'crisi' ? `Crisi${q > 1 ? ` <span class="badge">×${q}</span>` : ''}` : esc(titleOf(r))) + extra;
   const sub = r.kind === 'crisi' ? [fmtDur(d.durSec), d.tipo && d.tipo.replace(' (tonico-clonica)', '')].filter(Boolean).join(' · ') : k.sum(d);
   const row = `<div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${k.ic}</div>
     <div class="tx"><b>${title}</b><small>${esc(sub) || (r.kind === 'crisi' && d.note ? esc(d.note) : '&nbsp;')}</small>${r.kind === 'crisi' ? dots(d.intensita) : ''}</div>
@@ -301,6 +312,8 @@ function heroCard() {
 // ---------- viste ----------
 function viewHome() {
   const d = curDog(); let h = heroCard();
+  if (d.epi && !readonly && !liveRec()) h += `<button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>`;
+  if (!readonly) h += pillsCard();
   if (d.epi) {
     const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3);
     const prev = m2.total - m.total, diff = m.total - prev;
@@ -372,8 +385,11 @@ function viewStats() {
   const ms = monthsFrom(from), c = Object.fromEntries(ms.map(m => [m, 0]));
   rs.filter(r => r.kind === 'salute').forEach(r => { const m = r.data.date.slice(0, 7); if (m in c) c[m]++; });
   if (!d.epi || rs.some(r => r.kind === 'salute')) h += chartCard('Problemi di salute', 'Per mese', barChart(ms.map((m, i) => ({ l: monthLbl(m, i), v: c[m] })), { color: COLORS.salute, h: 140 }));
+  if (d.epi) h += therapyPeriodsCard();
+  h += levelsCards();
   const pesi = list(dog, 'visita').filter(r => r.data.peso).slice(0, 6);
-  if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div class="kv"><span>${esc(fmtDate(r.data.date))}</span><b>${esc(fmtNum(+r.data.peso))} kg</b></div>`).join('')}</div>`;
+  if (pesi.length > 1) h += chartCard('Peso', 'Dalle visite', lineChart(pesi.slice().reverse().map(r => ({ x: toDate(r.data.date), y: +r.data.peso, l: fmtDate(r.data.date) })), COLORS.visita, ' kg'));
+  else if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div class="kv"><span>${esc(fmtDate(r.data.date))}</span><b>${esc(fmtNum(+r.data.peso))} kg</b></div>`).join('')}</div>`;
   h += `<div class="glass card"><h2>Voci registrate</h2>${hbars(countBy(rs, r => KINDS[r.kind].name))}</div>`;
   return h;
 }
@@ -386,6 +402,7 @@ function vetSummary(st) {
     st.cluster ? `In <b>${plural(st.cluster, 'giorno', 'giorni')}</b> ci sono state 2 o più crisi (a grappolo).` : 'Nessun giorno con crisi a grappolo.',
     st.gapMedio ? `Tra una crisi e l'altra passano in media <b>${plural(Math.round(st.gapMedio), 'giorno', 'giorni')}</b> (pausa più lunga: ${Math.round(st.gapMax)}).` : '',
     st.durMedia ? `Durata media <b>${fmtDur(st.durMedia)}</b>, la più lunga ${fmtDur(st.durMax)}.` : '',
+    adherenceText(dog),
     st.last ? `Ultima crisi: <b>${esc(fmtDate(st.last.data.date))}${st.last.data.time ? ' alle ' + esc(st.last.data.time) : ''}</b>.` : '',
   ];
   return `<ul class="summary">${L.filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul>`;
@@ -409,14 +426,13 @@ function viewVet() {
     h += chartCard('Crisi per mese', '', seizureMonthChart(dog, st), monthLegend);
   }
   h += section('Terapia in corso', therapyCards(dog));
+  if (d.epi) h += therapyPeriodsCard();
   h += section('Storia della terapia', timeline(list(dog, 'terapia')));
   if (d.epi) h += section('Crisi', listHTML(inR(list(dog, 'crisi')), 'Nessuna crisi nel periodo', { swipe: false }));
   for (const k of ['analisi', 'visita', 'salute', 'vaccino']) {
     const rs = k === 'vaccino' ? list(dog, k) : inR(list(dog, k));
     if (rs.length) h += section(KINDS[k].name, listHTML(rs, '', { swipe: false }));
   }
-  h += section('I tuoi dati', `<div class="glass card"><p class="muted small">Il backup salva tutti i dati di Kafka e Zoe in un file. Con "Importa" puoi ricaricarlo o aggiungere voci da un file.</p>
-    <div class="row"><button class="btn" id="backup">💾 Backup</button><button class="btn" id="import">📥 Importa</button></div></div>`);
   return h;
 }
 
@@ -437,6 +453,7 @@ function reportHTML() {
     h += `<section class="chart"><h2>Crisi per mese</h2>${seizureMonthChart(dog, st)}<p class="muted">Pallino rosa = cambio di terapia</p></section>`;
   }
   h += `<section><h2>Terapia in corso</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
+  if (d.epi) h += `<section><h2>Crisi con ogni terapia</h2>${table(therapyPeriods(dog).map(x => ({ data: x })), [['Periodo', x => `${fmtDate(x.from)} → ${x.to ? fmtDate(x.to) : 'oggi'}`], ['Terapia', x => x.label], ['Crisi', x => x.n], ['Al mese', x => fmtNum(x.rate)]])}</section>`;
   h += `<section><h2>Storia della terapia</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Note', x => [x.motivo, x.note].filter(Boolean).join(' — ')]])}</section>`;
   if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Intensità', x => x.intensita ? x.intensita + '/5' : ''], ['Ripresa', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Farmaco emergenza', x => x.emergenza], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Analisi</h2>${table(inR(list(dog, 'analisi')), [['Giorno', x => fmtDate(x.date)], ['Tipo', x => x.tipo], ['Valore', x => x.valore], ['Esito', x => x.esito], ['Risultati', x => x.risultati]])}</section>`;
@@ -467,7 +484,7 @@ function exportBackup() {
 async function importFile(file) {
   let rs;
   try { const j = JSON.parse(await file.text()); rs = Array.isArray(j) ? j : j.records; } catch { return toast('File non valido'); }
-  rs = (rs || []).filter(r => r && KINDS[r.kind] && DOGS.some(d => d.id === r.dog) && r.data && (r.data.date || r.kind === 'profilo'));
+  rs = (rs || []).filter(r => r && KINDS[r.kind] && DOGS.some(d => d.id === r.dog) && r.data && (r.data.date || KINDS[r.kind].hidden));
   if (!rs.length) return toast('Nessuna voce da importare');
   const nuove = rs.filter(r => !r.id || !records[r.id] || records[r.id].deleted).length;
   if (!confirm(`Importare ${rs.length} voci (${nuove} nuove, ${rs.length - nuove} aggiornate)?`)) return;
@@ -485,7 +502,10 @@ function render() {
   $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${avatar(d.id, 26)}<span>${d.name}</span></button>`).join('');
   document.body.classList.toggle('zoe', dog === 'zoe');
   $('#title').textContent = TITLES[tab]();
-  $('#view').innerHTML = { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
+  const live = liveRec();
+  $('#view').innerHTML = (live ? liveHTML(live) : '') + { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
+  $('#gear').hidden = readonly; $('#fab').hidden = readonly;
+  loadDocThumbs($('#view'));
   document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
 }
 
@@ -542,6 +562,7 @@ function fieldHTML(f, d) {
     case 'chips': return lab + `<div class="chips">${f.o.map(o => `<label><input type="checkbox" name="${f.k}" value="${esc(o)}"${[].concat(v).includes(o) ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
     case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><div class="stars-l"><span>lieve</span><span>molto forte</span></div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
     case 'dur': { const s = +d.durSec || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="durMin" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="durS" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
+    case 'docs': return lab + `<div class="docs" data-docs>${[].concat(v || []).map(docThumb).join('')}<label class="doc-add">＋<input type="file" accept="image/*" multiple data-docfile hidden></label></div><input type="hidden" name="${f.k}" value="${esc(JSON.stringify([].concat(v || [])))}">`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
 }
@@ -565,6 +586,7 @@ function openForm(kind, rec) {
   $('#fBody').innerHTML = k.fields.map(f => fieldHTML(f, editing.data)).join('');
   $('#fDel').hidden = !rec || kind === 'profilo' || !records[rec.id];
   $('#form').showModal();
+  loadDocThumbs($('#fBody'));
 }
 $('#fBody').addEventListener('click', e => {
   const b = e.target.closest('.stars button'); if (!b) return;
@@ -584,10 +606,13 @@ $('#frm').addEventListener('submit', e => {
   for (const f of KINDS[editing.kind].fields) {
     if (f.t === 'dur') { const s = (+fd.get('durMin') || 0) * 60 + (+fd.get('durS') || 0); if (s) data.durSec = s; continue; }
     if (f.t === 'chips') { const a = fd.getAll(f.k); if (a.length) data[f.k] = a; continue; }
+    if (f.t === 'docs') { const a = JSON.parse(fd.get(f.k) || '[]'); if (a.length) data[f.k] = a; continue; }
     const v = (fd.get(f.k) || '').trim();
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
   }
-  if (!data.date && editing.kind !== 'profilo') return toast('Inserisci il giorno');
+  for (const k of ['live', 'startTs', 'fine']) if (editing.data[k] != null && editing.kind === 'crisi') data[k] = editing.data[k];
+  if (KINDS[editing.kind].hidden) data.date ||= editing.data.date || today();
+  if (!data.date) return toast('Inserisci il giorno');
   editing.data = data; save(editing); $('#form').close(); toast('Salvato ✓');
 });
 $('#fDel').onclick = () => {
@@ -608,6 +633,11 @@ $('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-
 $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); scrollTo(0, 0); });
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
+  const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
+  const pl = e.target.closest('[data-pill]'); if (pl) return togglePill(pl.dataset.pill);
+  if (e.target.closest('[data-prog]')) return openForm('programma', records[progId(dog)] || { id: progId(dog), dog, kind: 'programma', data: {} });
+  if (e.target.closest('[data-ics]')) return e.target.closest('[data-ics]').dataset.ics === 'pills' ? icsPills() : icsUpcoming();
+  if (readonly && !e.target.closest('[data-filter],[data-range],[data-goto],#pdf,#csv')) return;
   if (e.target.closest('.sdel')) return removeWithUndo(e.target.closest('.item'));
   if (openSw) return closeSwipe();
   if (e.target.closest('[data-profile]')) return openForm('profilo', records[profileId(dog)] || { id: profileId(dog), dog, kind: 'profilo', data: {} });
@@ -618,17 +648,288 @@ view.addEventListener('click', e => {
   const id = e.target.closest('button')?.id;
   if (id === 'pdf') return exportPDF();
   if (id === 'csv') return exportCSV();
-  if (id === 'backup') return exportBackup();
-  if (id === 'import') return $('#importFile').click();
 });
 addEventListener('scroll', () => document.body.classList.toggle('scrolled', scrollY > 8), { passive: true });
 addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 
+// ---------- crisi in corso: cronometro ----------
+const LIVE_MAX = 3 * 3600e3;
+const liveRec = () => Object.values(records).find(r => !r.deleted && r.kind === 'crisi' && r.data.live && Date.now() - r.data.startTs < LIVE_MAX);
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+function liveHTML(r) {
+  const d = r.data, q = +d.quante || 1, name = DOGS.find(x => x.id === r.dog).name;
+  return `<div class="glass live" data-start="${d.startTs}">
+    <div class="live-h"><span class="pulse"></span>Crisi in corso · ${esc(name)}</div>
+    <div class="timer" id="liveTimer">${clock(Date.now() - d.startTs)}</div>
+    <small>iniziata alle ${esc(d.time)}${q > 1 ? ` · ${q} crisi` : ''}${d.emergenza ? ` · ${esc(d.emergenza)}` : ''}</small>
+    <button class="btn stop" data-live="stop">■ Fine crisi</button>
+    <div class="live-row"><button data-live="plus">＋1 crisi</button><button data-live="ziepam">💊 Ziepam dato</button><button data-live="video" class="${d.video ? 'on' : ''}">📹 Video</button></div>
+    <button class="link" data-live="cancel">Avviata per sbaglio? Annulla</button>
+  </div>`;
+}
+let wake = null;
+async function keepAwake(on) {
+  try { if (on && !wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } else if (!on && wake) { await wake.release(); wake = null; } } catch {}
+}
+setInterval(() => {
+  const el = $('#liveTimer'); if (!el) return;
+  el.textContent = clock(Date.now() - +el.closest('.live').dataset.start);
+}, 500);
+function liveAction(a) {
+  let r = liveRec();
+  if (a === 'start') {
+    if (r) return;
+    r = { id: uuid(), dog, kind: 'crisi', data: { date: today(), time: nowTime(), quante: 1, live: true, startTs: Date.now() } };
+    save(r); keepAwake(true); scrollTo(0, 0); navigator.vibrate?.(60);
+    return;
+  }
+  if (!r) return;
+  if (a === 'plus') { r.data.quante = (+r.data.quante || 1) + 1; r.data.note = [r.data.note, `${r.data.quante}ª crisi alle ${nowTime()}`].filter(Boolean).join('. '); save(r); return toast(`${r.data.quante} crisi in questo episodio`); }
+  if (a === 'ziepam') { r.data.emergenza = [r.data.emergenza, `Ziepam alle ${nowTime()}`].filter(Boolean).join(', '); save(r); return toast('Segnato: Ziepam alle ' + nowTime()); }
+  if (a === 'video') { r.data.video = r.data.video ? undefined : 'Sì, nella galleria'; save(r); return toast(r.data.video ? 'Segnato: c\'è un video' : 'Video tolto'); }
+  if (a === 'cancel') { if (!confirm('Annullare questa crisi?')) return; r.deleted = true; save(r); keepAwake(false); return; }
+  if (a === 'stop') {
+    r.data.durSec = r.data.durSec || Math.max(1, Math.round((Date.now() - r.data.startTs) / 1000));
+    delete r.data.live; save(r); keepAwake(false);
+    openForm('crisi', r); toast(`Durata ${fmtDur(r.data.durSec)}: completa i dettagli`);
+  }
+}
+
+// ---------- pastiglie ----------
+const progId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000001a' : '00000000001b');
+function slotsOf(d) {
+  return (records[progId(d)]?.deleted ? '' : records[progId(d)]?.data.slots || '').split('\n').map(l => l.trim().match(/^(\d{1,2})[:.](\d{2})\s+(.+)$/)).filter(Boolean)
+    .map(m => ({ t: `${pad(+m[1])}:${m[2]}`, what: m[3] })).sort((a, b) => a.t.localeCompare(b.t));
+}
+const slotKey = s => `${s.t} ${s.what}`;
+const dosesOn = (d, date) => list(d, 'dose').filter(r => r.data.date === date);
+function pillsCard() {
+  const sl = slotsOf(dog);
+  if (!sl.length) return curDog().epi || currentTherapy(dog).length ? `<button class="glass card setup" data-prog><span class="ic" style="--c:${COLORS.terapia}">⏰</span><div><b>Imposta gli orari delle pastiglie</b><small>Per spuntarle ogni giorno e non saltarne nessuna</small></div></button>` : '';
+  const t = today(), taken = dosesOn(dog, t), now = nowTime();
+  const done = sl.filter(s => taken.some(r => r.data.slot === slotKey(s))).length;
+  return section('Pastiglie di oggi', `<div class="glass list pills">${sl.map(s => {
+    const r = taken.find(x => x.data.slot === slotKey(s)), late = !r && s.t < now;
+    return `<button class="pill-row${r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}"><span class="chk">${r ? '✓' : ''}</span>
+      <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small></button>`;
+  }).join('')}</div><div class="pills-f"><button class="link" data-prog>Modifica orari</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`);
+}
+function togglePill(key) {
+  const t = today(), r = dosesOn(dog, t).find(x => x.data.slot === key);
+  if (r) { r.deleted = true; save(r); return toast('Tolta la spunta', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } }); }
+  save({ id: uuid(), dog, kind: 'dose', data: { date: t, time: nowTime(), slot: key } }); navigator.vibrate?.(30);
+}
+function adherence(d, days = 30) {
+  const sl = slotsOf(d), prog = records[progId(d)]; if (!sl.length || !prog) return null;
+  const start = new Date(Math.max(toDate(prog.data.date || today()) - 0, Date.now() - (days - 1) * DAY));
+  const n = Math.max(1, daysBetween(toDate(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`), toDate(today())) + 1);
+  const from = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const keys = new Set(sl.map(slotKey)), got = new Set(list(d, 'dose').filter(r => r.data.date >= from && keys.has(r.data.slot)).map(r => r.data.date + r.data.slot));
+  const expected = sl.length * n - sl.filter(s => s.t > nowTime()).length;
+  return { pct: Math.min(100, Math.round(got.size / Math.max(1, expected) * 100)), missed: Math.max(0, expected - got.size), days: n };
+}
+function adherenceText(d) {
+  const a = adherence(d); if (!a) return '';
+  return `Pastiglie segnate negli ultimi ${plural(a.days, 'giorno', 'giorni')}: <b>${a.pct}%</b>${a.missed ? ` (${plural(a.missed, 'dose non segnata', 'dosi non segnate')})` : ''}.`;
+}
+
+// ---------- promemoria nel Calendario (.ics) ----------
+function icsFile(events, name) {
+  const st = d => d.replace(/[-:]/g, ''), now = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Diario Cani//IT', 'CALSCALE:GREGORIAN'];
+  for (const e of events) lines.push('BEGIN:VEVENT', `UID:${uuid()}@diario-cani`, `DTSTAMP:${now}`, `DTSTART:${st(e.start)}`, `DTEND:${st(e.end || e.start)}`,
+    ...(e.daily ? ['RRULE:FREQ=DAILY'] : []), `SUMMARY:${e.title.replace(/[,;]/g, ' ')}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e.title.replace(/[,;]/g, ' ')}`, `TRIGGER:${e.alarm || 'PT0M'}`, 'END:VALARM', 'END:VEVENT');
+  lines.push('END:VCALENDAR');
+  const a = document.createElement('a'); a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n')); a.download = name; a.click();
+}
+function icsPills() {
+  const t = today(), name = curDog().name;
+  icsFile(slotsOf(dog).map(s => ({ start: `${t}T${s.t}:00`, end: `${t}T${s.t}:00`, daily: true, title: `💊 ${name}: ${s.what}` })), `pastiglie-${dog}.ics`);
+}
+function icsUpcoming() {
+  const name = curDog().name;
+  icsFile(upcoming(dog).map(({ r, due }) => ({ start: `${due}T09:00:00`, end: `${due}T09:30:00`, title: `${KINDS[r.kind].ic} ${name}: ${titleOf(r)}`, alarm: '-P1D' })), `scadenze-${dog}.ics`);
+}
+
+// ---------- grafici: linee, livelli nel sangue, crisi con ogni terapia ----------
+function lineChart(pts, color, unit = '') {
+  if (pts.length < 2) return '';
+  const W = 340, H = 150, pl = 34, pr = 10, pt = 14, pb = 24;
+  const ys = pts.map(p => p.y), min = Math.min(...ys), max = Math.max(...ys), pad_ = (max - min) * .15 || 1, lo = min - pad_, hi = max + pad_;
+  const x0 = +pts[0].x, x1 = +pts[pts.length - 1].x || x0 + 1;
+  const X = p => pl + (W - pl - pr) * ((+p.x - x0) / ((x1 - x0) || 1)), Y = p => pt + (H - pt - pb) * (1 - (p.y - lo) / (hi - lo));
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  [lo + pad_, (lo + hi) / 2, hi - pad_].forEach(v => { const y = pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo)); s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="currentColor" stroke-opacity=".08"/><text x="${pl - 6}" y="${y + 3}" text-anchor="end">${fmtNum(v)}</text>`; });
+  s += `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p => `${X(p)},${Y(p)}`).join(' ')}"/>`;
+  pts.forEach((p, i) => { s += `<circle cx="${X(p)}" cy="${Y(p)}" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2"><title>${esc(p.l)}: ${fmtNum(p.y)}${unit}</title></circle>`; if (i === 0 || i === pts.length - 1) s += `<text x="${X(p)}" y="${H - 7}" text-anchor="${i ? 'end' : 'start'}">${esc(p.l)}</text>`; });
+  return s + '</svg>';
+}
+function levelsCards() {
+  const groups = {};
+  for (const r of list(dog, 'analisi').slice().reverse()) {
+    const v = parseFloat(String(r.data.valore || '').replace(',', '.'));
+    if (/fenobarb|bromuro/i.test(r.data.tipo || '') && !isNaN(v)) (groups[r.data.tipo] ||= []).push({ x: toDate(r.data.date), y: v, l: fmtDate(r.data.date) });
+  }
+  return Object.entries(groups).filter(([, p]) => p.length > 1).map(([t, p]) => chartCard(esc(t), 'Valori delle analisi nel tempo', lineChart(p, COLORS.analisi))).join('');
+}
+// periodi tra un cambio di terapia e l'altro, con quante crisi al mese in ciascuno
+function therapyPeriods(d) {
+  const ther = list(d, 'terapia').slice().reverse(), crisi = list(d, 'crisi');
+  const dates = [...new Set(ther.map(r => r.data.date))].sort();
+  return dates.map((from, i) => {
+    const to = dates[i + 1], active = {};
+    for (const r of ther) if (r.data.date <= from) active[drugKey(r.data.farmaco)] = r;
+    const label = Object.values(active).filter(r => r.data.sospeso !== 'Sospeso').map(r => `${r.data.farmaco.split(' (')[0]}${r.data.dose ? ' ' + r.data.dose : ''}${r.data.freq && r.data.freq !== 'Altro' ? ' ×' + (parseInt(r.data.freq) || '') : ''}`).join(' + ') || 'Nessuna terapia';
+    const n = crisi.filter(r => r.data.date >= from && (!to || r.data.date < to)).reduce((s, r) => s + (+r.data.quante || 1), 0);
+    const days = Math.max(1, daysBetween(toDate(from), to ? toDate(to) : new Date()));
+    return { from, to, label, n, days, rate: n / (days / 30.44) };
+  }).reverse();
+}
+function therapyPeriodsCard() {
+  const ps = therapyPeriods(dog); if (!ps.length) return '';
+  const max = Math.max(...ps.map(p => p.rate), .1);
+  return `<div class="glass card"><div class="card-h"><h2>Crisi con ogni terapia</h2><small>Crisi al mese in ogni periodo tra due cambi di terapia</small></div>${ps.map(p => `<div class="tp${p.days < 14 ? ' short' : ''}">
+    <div class="tp-h"><span>${esc(fmtDate(p.from))} → ${p.to ? esc(fmtDate(p.to)) : 'oggi'}</span><b>${fmtNum(p.rate)}<small>/mese</small></b></div>
+    <div class="tp-l">${esc(p.label)}</div>
+    <i><i style="width:${p.rate / max * 100}%"></i></i><small>${plural(p.n, 'crisi', 'crisi')} in ${plural(p.days, 'giorno', 'giorni')}${p.days < 14 ? ' · periodo breve, poco indicativo' : ''}</small></div>`).join('')}</div>`;
+}
+
+// ---------- foto di referti e documenti ----------
+const docThumb = path => `<button type="button" class="doc" data-doc="${esc(path)}"><img alt=""><span data-rmdoc title="Togli">✕</span></button>`;
+const docUrls = {};
+async function loadDocThumbs(root) {
+  if (!sb || !user) return;
+  for (const b of root.querySelectorAll('[data-doc]')) {
+    const p = b.dataset.doc;
+    if (!docUrls[p]) { const { data } = await sb.storage.from('documenti').createSignedUrl(p, 3600).catch(() => ({})); if (data) docUrls[p] = data.signedUrl; }
+    if (docUrls[p]) b.querySelector('img').src = docUrls[p];
+  }
+}
+function shrinkImage(file, max = 1600) {
+  return new Promise((ok, ko) => {
+    const img = new Image(); img.onerror = ko;
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src); c.toBlob(b => b ? ok(b) : ko(), 'image/jpeg', .82);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+$('#fBody').addEventListener('change', async e => {
+  if (!e.target.matches('[data-docfile]')) return;
+  if (!sb || !user) return toast('Serve l\'accesso con account');
+  const box = e.target.closest('[data-docs]'), inp = box.nextElementSibling, list_ = JSON.parse(inp.value || '[]');
+  toast('Carico le foto…');
+  for (const f of e.target.files) {
+    try {
+      const path = `${ownerId || user.id}/${uuid()}.jpg`, blob = await shrinkImage(f);
+      const { error } = await sb.storage.from('documenti').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      list_.push(path); box.querySelector('.doc-add').insertAdjacentHTML('beforebegin', docThumb(path));
+    } catch (err) { console.warn(err); toast('Foto non caricata: controlla la connessione'); }
+  }
+  inp.value = JSON.stringify(list_); e.target.value = ''; loadDocThumbs(box); toast('Foto aggiunte ✓');
+});
+$('#fBody').addEventListener('click', e => {
+  const d = e.target.closest('[data-doc]'); if (!d) return;
+  e.preventDefault();
+  if (e.target.closest('[data-rmdoc]')) {
+    const inp = d.closest('[data-docs]').nextElementSibling;
+    inp.value = JSON.stringify(JSON.parse(inp.value).filter(p => p !== d.dataset.doc)); d.remove(); return;
+  }
+  if (docUrls[d.dataset.doc]) window.open(docUrls[d.dataset.doc], '_blank');
+});
+
+// ---------- impostazioni: famiglia, veterinario, schermata di blocco ----------
+const token = (n, abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789') => [...crypto.getRandomValues(new Uint8Array(n))].map(b => abc[b % abc.length]).join('');
+const appUrl = () => location.origin + location.pathname;
+let links = [], members = [];
+async function loadSettings() {
+  if (!sb || !user) return;
+  const [l, m] = await Promise.all([sb.from('pet_links').select('*'), sb.from('pet_members').select('*').eq('owner', user.id)]);
+  links = l.data || []; members = m.data || [];
+}
+const linkOf = scope => links.find(l => l.scope === scope);
+const copyBtn = (v, label = 'Copia') => `<button class="copy" data-copy="${esc(v)}">${label}</button>`;
+function settingsHTML() {
+  if (!sb || !user) return '<p class="muted">Le impostazioni richiedono l\'accesso con account.</p>';
+  const isMember = ownerId && ownerId !== user.id, inv = linkOf('invito'), vet = linkOf('vet'), rap = linkOf('rapida');
+  const vetUrl = vet && `${appUrl()}?vet=${vet.token}`;
+  let h = `<div class="set-sec"><h3>👤 Account</h3><p>${esc(user.email)}</p>${isMember ? '<p class="muted small">Stai vedendo i cani della famiglia che ti ha invitato.</p>' : ''}</div>`;
+  if (!isMember) {
+    h += `<div class="set-sec"><h3>⚡ Crisi dalla schermata di blocco</h3>
+      ${rap ? `<p class="small">Crea un <b>Comando rapido</b> sull'iPhone. Premuto la 1ª volta avvia la crisi di Kafka, la 2ª volta la chiude e salva la durata, anche a telefono bloccato.</p>
+      <ol class="steps">
+        <li>Apri l'app <b>Comandi</b> → <b>＋</b> → chiamalo <b>Crisi Kafka</b>.</li>
+        <li>Aggiungi l'azione <b>Ottieni contenuto dell'URL</b> e incolla l'indirizzo:<code>${esc(C.supabaseUrl)}/rest/v1/rpc/crisi_rapida</code>${copyBtn(C.supabaseUrl + '/rest/v1/rpc/crisi_rapida')}</li>
+        <li>Tocca <b>›</b> per aprire le opzioni: <b>Metodo</b> = POST.</li>
+        <li><b>Intestazioni</b>: aggiungi <b>apikey</b> con questo valore:<code>${esc(C.supabaseKey)}</code>${copyBtn(C.supabaseKey)}</li>
+        <li><b>Corpo richiesta</b> = JSON → aggiungi un campo <b>Testo</b> chiamato <b>t</b> con il valore:<code>${esc(rap.token)}</code>${copyBtn(rap.token)}</li>
+        <li>Aggiungi l'azione <b>Mostra notifica</b> e scegli <b>Contenuto dell'URL</b>.</li>
+        <li>Schermata di blocco: tienila premuta → <b>Personalizza</b> → <b>Schermata di blocco</b> → tocca <b>–</b> sulla torcia → <b>＋</b> → <b>Comandi rapidi</b> → <b>Crisi Kafka</b>. Lascia la fotocamera dall'altro lato per filmare.</li>
+      </ol>
+      <p class="muted small">Prova: premi, aspetta qualche secondo, premi di nuovo. In Diario troverai la crisi con la durata (poi eliminala).</p>
+      <button class="link danger" data-set="del:rapida">Disattiva il comando (crea un nuovo codice)</button>`
+      : `<p class="small">Un pulsante sulla schermata di blocco per far partire il cronometro senza sbloccare il telefono.</p><button class="btn primary" data-set="new:rapida">Configura</button>`}</div>`;
+    h += `<div class="set-sec"><h3>🩺 Link per il veterinario</h3>
+      ${vet ? `<p class="small">Chi ha questo link vede il report aggiornato in sola lettura, senza account.</p><code>${esc(vetUrl)}</code>
+      <div class="row"><button class="btn" data-share="${esc(vetUrl)}">Condividi</button>${copyBtn(vetUrl, 'Copia')}</div><button class="link danger" data-set="del:vet">Disattiva il link</button>`
+      : `<p class="small">Un link privato al report sempre aggiornato, da mandare al veterinario.</p><button class="btn primary" data-set="new:vet">Crea il link</button>`}</div>`;
+    const msg = inv && `Ciao! Per vedere e segnare i dati di Kafka e Zoe: apri ${appUrl()} , crea un account, poi tocca ⚙️ → "Unisciti alla famiglia" e inserisci il codice ${inv.token}`;
+    h += `<div class="set-sec"><h3>👨‍👩‍👧 Famiglia</h3>
+      <p class="small">Chi inviti può vedere e segnare tutto, anche da Android o dal computer.</p>
+      ${members.map(m => `<div class="kv"><span>${esc(m.member_email || 'Familiare')}</span><button class="link danger" data-set="rm:${m.member}">Togli</button></div>`).join('')}
+      ${inv ? `<div class="code">${esc(inv.token)}</div><div class="row"><button class="btn" data-share="${esc(msg)}">Invia l'invito</button><button class="btn" data-set="del:invito">Nuovo codice</button></div>`
+      : `<button class="btn primary" data-set="new:invito">Crea un codice invito</button>`}</div>`;
+  }
+  h += `<div class="set-sec"><h3>🔑 Unisciti alla famiglia</h3><p class="small">Hai ricevuto un codice? Inseriscilo per vedere i cani di chi ti ha invitato.</p>
+    <div class="row"><input id="joinCode" placeholder="Codice" autocapitalize="characters"><button class="btn" data-set="join">Entra</button></div></div>`;
+  h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
+    <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>
+    <button class="btn danger" data-set="logout">Esci</button>`;
+  return h;
+}
+async function openSettings() { $('#setBody').innerHTML = '<p class="muted">Carico…</p>'; $('#settings').showModal(); await loadSettings().catch(() => {}); $('#setBody').innerHTML = settingsHTML(); }
+$('#gear').onclick = openSettings;
+$('#setBody').addEventListener('click', async e => {
+  const c = e.target.closest('[data-copy]'); if (c) { await navigator.clipboard?.writeText(c.dataset.copy).catch(() => {}); return toast('Copiato ✓'); }
+  const sh = e.target.closest('[data-share]'); if (sh) { const t = sh.dataset.share; return navigator.share ? navigator.share({ text: t }).catch(() => {}) : (navigator.clipboard?.writeText(t), toast('Copiato ✓')); }
+  const b = e.target.closest('[data-set]'); if (!b) return;
+  const [act, arg] = b.dataset.set.split(':');
+  try {
+    if (act === 'new') { const { error } = await sb.from('pet_links').insert({ token: arg === 'invito' ? token(6) : token(24), scope: arg }); if (error) throw error; }
+    if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
+    if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
+    if (act === 'join') { const { error } = await sb.rpc('join_family', { code: $('#joinCode').value }); if (error) throw error; records = {}; pending.clear(); persist(); await findOwner(); await sync(); toast('Ora fai parte della famiglia 🐾'); }
+    if (act === 'backup') return exportBackup();
+    if (act === 'import') return $('#importFile').click();
+    if (act === 'logout') { if (!confirm('Uscire dall\'account?')) return; await sb.auth.signOut(); localStorage.removeItem('cani.records'); localStorage.removeItem('cani.pending'); return location.reload(); }
+    await loadSettings(); $('#setBody').innerHTML = settingsHTML();
+  } catch (err) { toast(/schema cache|does not exist|relation/.test(err.message) ? 'Prima esegui schema-2.sql su Supabase' : err.message); }
+});
+
+// ---------- link del veterinario: sola lettura, senza account ----------
+async function openVetLink(t) {
+  readonly = true; tab = 'vet'; document.body.classList.add('readonly');
+  const { data, error } = await sb.rpc('vet_report', { t });
+  if (error || !data?.length) { document.body.innerHTML = '<div class="glass card login"><h1>Link non valido</h1><p class="muted">Chiedi un nuovo link al proprietario.</p></div>'; return; }
+  records = Object.fromEntries(data.map(r => [r.id, { ...r, deleted: false }]));
+  if (!list(dog, 'crisi').length && !list(dog).length) dog = DOGS.find(d => list(d.id).length)?.id || dog;
+  showApp();
+}
+
 // ---------- accesso ----------
-function showApp() {
+async function findOwner() {
+  if (!sb || !user) return;
+  const { data } = await sb.from('pet_members').select('owner').eq('member', user.id).limit(1);
+  ownerId = data?.[0]?.owner || user.id;
+}
+async function showApp() {
   $('#login').hidden = true;['#app', '#tabbar', '#fab'].forEach(s => $(s).hidden = false);
-  render(); sync();
+  render();
+  if (!readonly) { await findOwner().catch(() => {}); sync(); }
 }
 async function doLogin(signup) {
   const email = $('#lEmail').value.trim(), password = $('#lPass').value, msg = $('#lMsg');
@@ -644,6 +945,8 @@ $('#lNew').onclick = () => doLogin(true);
 
 (async () => {
   if (!sb) return showApp(); // senza Supabase: solo sul telefono
+  const vetToken = new URLSearchParams(location.search).get('vet');
+  if (vetToken) return openVetLink(vetToken);
   const { data } = await sb.auth.getSession();
   user = data.session?.user || null;
   if (user) showApp(); else $('#login').hidden = false;

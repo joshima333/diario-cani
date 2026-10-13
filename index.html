@@ -33,7 +33,7 @@
 <main id="app" hidden>
   <header class="top">
     <div class="seg" id="dogSeg"></div>
-    <span id="sync" class="sync" title="Sincronizzazione"></span>
+    <div class="top-r"><span id="sync" class="sync" title="Sincronizzazione"></span><button id="gear" class="gear" aria-label="Impostazioni">⚙️</button></div>
   </header>
   <h1 class="large" id="title"></h1>
   <div id="view"></div>
@@ -70,6 +70,15 @@
 </dialog>
 
 <input type="file" id="importFile" accept=".json,application/json" hidden>
+<!-- Impostazioni -->
+<dialog id="settings" class="sheet">
+  <div class="glass card">
+    <h2>⚙️ Impostazioni</h2>
+    <div id="setBody"></div>
+    <button class="btn" data-close>Chiudi</button>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
 <!-- Report stampabile -->
