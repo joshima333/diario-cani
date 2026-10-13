@@ -78,6 +78,20 @@ const KINDS = {
     title: d => d.titolo || 'Problema',
     sum: d => [d.farmaco, d.risolto].filter(Boolean).join(' · '),
   },
+  profilo: {
+    ic: '🐾', name: 'Profilo', hidden: true,
+    fields: [
+      { k: 'nascita', l: 'Data di nascita', t: 'date' },
+      { k: 'razza', l: 'Razza', t: 'text' },
+      { k: 'sesso', l: 'Sesso', t: 'select', o: ['Femmina', 'Maschio'] },
+      { k: 'sterilizzata', l: 'Sterilizzazione', t: 'select', o: ['Sì', 'No'] },
+      { k: 'microchip', l: 'Microchip', t: 'text' },
+      { k: 'peso', l: 'Peso (kg)', t: 'num', step: '0.1' },
+      { k: 'vet', l: 'Veterinario di riferimento', t: 'text' },
+      { k: 'note', l: 'Note (allergie, diagnosi…)', t: 'area' },
+    ],
+    sum: () => '',
+  },
   visita: {
     ic: '🩺', name: 'Visita veterinaria',
     fields: [
@@ -141,13 +155,26 @@ function save(rec) {
   rec.updated = Date.now(); records[rec.id] = rec; pending.add(rec.id); persist(); render(); sync();
 }
 const list = (dog, kind) => Object.values(records)
-  .filter(r => !r.deleted && r.dog === dog && (!kind || r.kind === kind))
+  .filter(r => !r.deleted && r.dog === dog && (kind ? r.kind === kind : r.kind !== 'profilo'))
   .sort((a, b) => toDate(b.data.date, b.data.time) - toDate(a.data.date, a.data.time));
 
 // ---------- stato interfaccia ----------
 let dog = LS.get('cani.dog', 'kafka'), tab = 'home', filter = '', range = 6;
 const curDog = () => DOGS.find(d => d.id === dog);
-const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.only || d[k.only]);
+const profileId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000000a' : '00000000000b');
+const profile = d => records[profileId(d)]?.data || {};
+function ageOf(d) {
+  const n = profile(d).nascita; if (!n) return DOGS.find(x => x.id === d).eta;
+  const b = toDate(n), t = new Date(); let y = t.getFullYear() - b.getFullYear(), m = t.getMonth() - b.getMonth();
+  if (t.getDate() < b.getDate()) m--; if (m < 0) { y--; m += 12; }
+  return y ? `${y} ann${y === 1 ? 'o' : 'i'}${m ? ` e ${m} mes${m === 1 ? 'e' : 'i'}` : ''}` : `${m} mes${m === 1 ? 'e' : 'i'}`;
+}
+function profileHTML() {
+  const p = profile(dog), bits = [p.razza, p.sesso, p.peso && p.peso + ' kg', p.microchip && 'Chip ' + p.microchip].filter(Boolean);
+  return `<div class="glass card item" data-profile style="margin-bottom:14px"><div class="ic">🐾</div>
+    <div class="tx"><b>${esc(curDog().name)} · ${esc(ageOf(dog))}</b><small>${esc(bits.join(' · ')) || 'Tocca per completare il profilo'}</small></div><div class="dt">›</div></div>`;
+}
+const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
 
 function renderSeg() {
   $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${d.name}</button>`).join('');
@@ -246,7 +273,7 @@ const countBy = (rs, f) => rs.reduce((o, r) => { [].concat(f(r) || []).forEach(k
 
 // ---------- viste ----------
 function viewHome() {
-  const d = curDog(); let h = '';
+  const d = curDog(); let h = profileHTML();
   if (d.epi) {
     const st = seizureStats(dog, 1), st3 = seizureStats(dog, 3);
     const senza = st.last ? Math.max(0, daysBetween(st.last, new Date())) : '—';
@@ -330,7 +357,8 @@ const arr = v => [].concat(v || []).join(', ');
 function reportHTML() {
   const d = curDog(), from = range ? new Date(new Date().getFullYear(), new Date().getMonth() - range + 1, 1) : new Date(0);
   const inR = rs => rs.filter(r => toDate(r.data.date) >= from);
-  let h = `<section><h1>${esc(d.name)} — ${esc(d.eta)}</h1><p class="muted">Report dal ${range ? from.toLocaleDateString('it-IT') : 'primo dato'} al ${new Date().toLocaleDateString('it-IT')}</p></section>`;
+  const p = profile(dog), info = [p.razza, p.sesso, p.sterilizzata === 'Sì' && 'sterilizzata', p.nascita && 'nata il ' + fmtDate(p.nascita), p.peso && p.peso + ' kg', p.microchip && 'microchip ' + p.microchip].filter(Boolean).join(' · ');
+  let h = `<section><h1>${esc(d.name)} — ${esc(ageOf(dog))}</h1>${info ? `<p>${esc(info)}</p>` : ''}${p.note ? `<p>${esc(p.note)}</p>` : ''}<p class="muted">Report dal ${range ? from.toLocaleDateString('it-IT') : 'primo dato'} al ${new Date().toLocaleDateString('it-IT')}</p></section>`;
   if (d.epi) {
     const st = seizureStats(dog, range);
     h += `<section><h2>Riepilogo crisi</h2><table>
@@ -351,6 +379,7 @@ function reportHTML() {
 }
 function viewVet() {
   return rangePills() + `<div class="row" style="margin:0 0 14px"><button class="btn primary" id="pdf">📄 Esporta PDF</button><button class="btn" id="csv">📊 Esporta CSV</button></div>
+    <div class="row" style="margin:0 0 14px"><button class="btn" id="backup">💾 Backup</button><button class="btn" id="import">📥 Importa</button></div>
     <div class="glass card report">${reportHTML()}</div>`;
 }
 
@@ -368,6 +397,29 @@ function exportCSV() {
   if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// backup di tutti e due i cani; lo stesso formato si reimporta con "Importa"
+function shareFile(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportBackup() {
+  const rs = Object.values(records).filter(r => !r.deleted).map(({ id, dog, kind, data }) => ({ id, dog, kind, data }));
+  shareFile(new Blob([JSON.stringify({ app: 'diario-cani', records: rs }, null, 1)], { type: 'application/json' }), `diario-cani-${today()}.json`);
+}
+async function importFile(file) {
+  let rs;
+  try { const j = JSON.parse(await file.text()); rs = Array.isArray(j) ? j : j.records; } catch { return toast('File non valido'); }
+  rs = (rs || []).filter(r => r && KINDS[r.kind] && DOGS.some(d => d.id === r.dog) && r.data?.date || r?.kind === 'profilo');
+  if (!rs.length) return toast('Nessuna voce da importare');
+  const nuove = rs.filter(r => !r.id || !records[r.id] || records[r.id].deleted).length;
+  if (!confirm(`Importare ${rs.length} voci (${nuove} nuove, ${rs.length - nuove} aggiornate)?`)) return;
+  const now = Date.now();
+  for (const r of rs) { const id = r.id || uuid(); records[id] = { id, dog: r.dog, kind: r.kind, data: r.data, deleted: false, updated: now }; pending.add(id); }
+  persist(); render(); sync(); toast(`Importate ${rs.length} voci`);
+}
+$('#importFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importFile(f); };
 
 // ---------- render ----------
 const TITLES = { home: d => d.name, diario: () => 'Diario', stats: () => 'Statistiche', vet: () => 'Per il veterinario' };
@@ -403,7 +455,7 @@ function openForm(kind, rec) {
   const k = KINDS[kind];
   $('#fTitle').textContent = `${k.ic} ${k.name} · ${curDog().name}`;
   $('#fBody').innerHTML = k.fields.map(f => fieldHTML(f, editing.data)).join('');
-  $('#fDel').hidden = !rec;
+  $('#fDel').hidden = !rec || kind === 'profilo';
   $('#form').showModal();
 }
 $('#fBody').addEventListener('click', e => {
@@ -420,7 +472,7 @@ $('#frm').addEventListener('submit', e => {
     const v = (fd.get(f.k) || '').trim();
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
   }
-  if (!data.date) return toast('Inserisci il giorno');
+  if (!data.date && editing.kind !== 'profilo') return toast('Inserisci il giorno');
   editing.data = data; save(editing); $('#form').close(); toast('Salvato');
 });
 $('#fDel').onclick = () => {
@@ -444,6 +496,9 @@ $('#view').addEventListener('click', e => {
   const rg = e.target.closest('[data-range]'); if (rg) { range = +rg.dataset.range; return render(); }
   if (e.target.id === 'pdf') return exportPDF();
   if (e.target.id === 'csv') return exportCSV();
+  if (e.target.id === 'backup') return exportBackup();
+  if (e.target.id === 'import') return $('#importFile').click();
+  if (e.target.closest('[data-profile]')) return openForm('profilo', records[profileId(dog)] || { id: profileId(dog), dog, kind: 'profilo', data: {} });
 });
 addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
