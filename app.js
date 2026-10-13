@@ -624,11 +624,11 @@ document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e =
 
 // ---------- eventi ----------
 $('#fab').onclick = () => {
-  $('#pickList').innerHTML = kindsFor(curDog()).map(([id, k]) => `<button data-kind="${id}" style="--c:${COLORS[id]}"><span class="ic">${k.ic}</span>${k.name}</button>`).join('');
+  $('#pickList').innerHTML = `<button class="voice-btn" data-voice><span class="ic" style="--c:#7b61ff">🎙️</span><div><b>Detta a voce</b><small>Parla e l'app smista tutto da sola</small></div></button>` + kindsFor(curDog()).map(([id, k]) => `<button data-kind="${id}" style="--c:${COLORS[id]}"><span class="ic">${k.ic}</span>${k.name}</button>`).join('');
   $('#pickTitle').innerHTML = `${avatar(dog, 28)} Cosa segni per ${esc(curDog().name)}?`;
   $('#pick').showModal();
 };
-$('#pickList').addEventListener('click', e => { const b = e.target.closest('[data-kind]'); if (!b) return; $('#pick').close(); openForm(b.dataset.kind); });
+$('#pickList').addEventListener('click', e => { if (e.target.closest('[data-voice]')) { $('#pick').close(); return Voice.open(); } const b = e.target.closest('[data-kind]'); if (!b) return; $('#pick').close(); openForm(b.dataset.kind); });
 $('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-dog]'); if (!b || b.dataset.dog === dog) return; dog = b.dataset.dog; LS.set('cani.dog', dog); filter = ''; render(); });
 $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); scrollTo(0, 0); });
 view.addEventListener('click', e => {

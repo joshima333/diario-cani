@@ -70,6 +70,18 @@
 </dialog>
 
 <input type="file" id="importFile" accept=".json,application/json" hidden>
+<!-- Dettatura -->
+<dialog id="voice" class="sheet">
+  <div class="glass card">
+    <h2 id="vTitle">Detta</h2>
+    <div class="vrec"><button type="button" id="vMic" class="mic" aria-label="Microfono">🎙️</button><p id="vHint" class="small muted"></p></div>
+    <textarea id="vText" placeholder="Es. &quot;Oggi visita dal veterinario, pesa 18 chili, il fenobarbital nel sangue è 28, aumentare Phenoleptil a tre quarti due volte al giorno, ricontrollo tra tre mesi&quot;"></textarea>
+    <button type="button" class="btn primary" id="vGo">Analizza</button>
+    <div id="vList"></div>
+    <div class="row"><button type="button" class="btn" data-close>Annulla</button><button type="button" class="btn primary" id="vSave" hidden>Salva</button></div>
+  </div>
+</dialog>
+
 <!-- Impostazioni -->
 <dialog id="settings" class="sheet">
   <div class="glass card">
@@ -87,5 +99,6 @@
 <script src="supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="voice.js"></script>
 </body>
 </html>
