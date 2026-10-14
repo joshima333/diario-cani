@@ -90,6 +90,8 @@ const KINDS = {
       { k: 'sesso', l: 'Sesso', t: 'select', o: ['Femmina', 'Maschio'] },
       { k: 'sterilizzata', l: 'Sterilizzazione', t: 'select', o: ['Sì', 'No'] },
       { k: 'microchip', l: 'Microchip', t: 'text' },
+      { k: 'passaporto', l: 'Passaporto europeo', t: 'text' },
+      { k: 'mantello', l: 'Mantello', t: 'text' },
       { k: 'peso', l: 'Peso (kg)', t: 'num', step: '0.1' },
       { k: 'vet', l: 'Veterinario di riferimento', t: 'text' },
       { k: 'note', l: 'Note (allergie, diagnosi…)', t: 'area' },
@@ -489,7 +491,12 @@ async function importFile(file) {
   const nuove = rs.filter(r => !r.id || !records[r.id] || records[r.id].deleted).length;
   if (!confirm(`Importare ${rs.length} voci (${nuove} nuove, ${rs.length - nuove} aggiornate)?`)) return;
   const now = Date.now();
-  for (const r of rs) { const id = r.id || uuid(); records[id] = { id, dog: r.dog, kind: r.kind, data: r.data, deleted: false, updated: now }; pending.add(id); }
+  for (const r of rs) {
+    const id = r.id || uuid(), old = records[id];
+    // il profilo si completa senza cancellare quello che c'è già (foto, microchip…)
+    const data = r.kind === 'profilo' && old ? { ...r.data, ...Object.fromEntries(Object.entries(old.data).filter(([, v]) => v !== '' && v != null)) } : r.data;
+    records[id] = { id, dog: r.dog, kind: r.kind, data, deleted: !!r.deleted, updated: now }; pending.add(id);
+  }
   persist(); render(); sync(); toast(`Importate ${rs.length} voci`);
 }
 $('#importFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importFile(f); };
