@@ -331,30 +331,48 @@ function heroCard() {
 }
 
 // ---------- viste ----------
+// riquadri "a colpo d'occhio": solo ciò che conta adesso, in ordine di importanza
+const tile = (label, big, sub = '', em = '', attrs = '', cls = '') => `<div class="glass tile${attrs ? ' tap' : ''} ${cls}" ${attrs}><small>${label}</small><b class="${String(big).length > 6 ? 'sm' : ''}">${big}</b>${sub ? `<span>${sub}</span>` : ''}${em ? `<em>${em}</em>` : ''}</div>`;
+const inTime = mins => mins < 60 ? `tra ${mins} min` : `tra ${Math.floor(mins / 60)} h${mins % 60 ? ' ' + (mins % 60) + ' min' : ''}`;
+function nextDose(d) {
+  const t = today(), now = nowTime(), mins = hm => +hm.slice(0, 2) * 60 + +hm.slice(3);
+  for (const [day, add] of [[t, 0], [dayAdd(t, 1), 1440]]) {
+    const taken = new Set(dosesOn(d, day).map(r => r.data.slot));
+    const s = slotsFor(d, day).find(s => !taken.has(slotKey(s)) && (day > t || s.t >= now));
+    if (s) return { ...s, mins: mins(s.t) + add - mins(now), tomorrow: !!add };
+  }
+  return null;
+}
+function homeTiles() {
+  const d = curDog(), out = [], t = today();
+  const late = (() => { const taken = new Set(dosesOn(dog, t).map(r => r.data.slot)); return slotsFor(dog, t).filter(s => !taken.has(slotKey(s)) && s.t < nowTime()); })();
+  if (late.length) out.push(tile('Da dare', `${late[0].t}`, esc(late[0].what), late.length > 1 ? `e altre ${late.length - 1}` : 'in ritardo', '', 'warn'));
+  const nd = nextDose(dog);
+  if (nd) out.push(tile('Prossima pastiglia', `${nd.tomorrow ? 'domani ' : ''}${nd.t}`, esc(nd.what), inTime(nd.mins)));
+  if (d.epi) {
+    const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3), diff = m.total - (m2.total - m.total);
+    out.push(tile('Crisi questo mese', m.total, '', diff > 0 ? `<i class="up">▲ ${diff} sul mese scorso</i>` : diff < 0 ? `<i class="down">▼ ${-diff} sul mese scorso</i>` : 'come il mese scorso'));
+    if (q.last || m.last) { const l = m.last || q.last; out.push(tile('Ultima crisi', esc(fmtDate(l.data.date).replace(/ \d{4}$/, '')), since(l.data.date), '', `data-id="${l.id}"`)); }
+    out.push(tile('Media 3 mesi', fmtNum(q.alMese), 'crisi al mese'));
+  }
+  const rg = courseRange(dog);
+  if (rg && rg.to >= t) { const tot = daysBetween(toDate(rg.from), toDate(rg.to)) + 1, n = Math.min(tot, daysBetween(toDate(rg.from), toDate(t)) + 1); out.push(tile('Cura in corso', `giorno ${n}/${tot}`, `fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ''))}`, `<i class="bar"><i style="width:${n / tot * 100}%"></i></i>`)); }
+  // in corso: segnato così, oppure senza stato ma recente (ultimi 30 giorni)
+  const probs = list(dog, 'salute').filter(r => r.data.risolto === 'In corso' || (!r.data.risolto && r.data.date >= dayAdd(t, -30)));
+  if (probs.length) out.push(tile(probs.length > 1 ? `${probs.length} problemi in corso` : 'Problema in corso', esc(probs[0].data.titolo || 'Problema'), `dal ${esc(fmtDate(probs[0].data.date).replace(/ \d{4}$/, ''))}`, 'tocca per aggiornare', `data-id="${probs[0].id}"`, 'warn'));
+  const up = upcoming(dog)[0];
+  if (up) out.push(tile('Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), `tra ${plural(daysBetween(new Date(), toDate(up.due)), 'giorno', 'giorni')}`, `data-id="${up.r.id}"`));
+  if (!d.epi) { const v = list(dog, 'visita').filter(r => r.data.date <= t)[0]; if (v) out.push(tile('Ultima visita', esc(fmtDate(v.data.date).replace(/ \d{4}$/, '')), since(v.data.date), esc(v.data.motivo || ''), `data-id="${v.id}"`)); }
+  return out.length ? `<div class="tiles">${out.slice(0, 6).join('')}</div>` : '';
+}
 function viewHome() {
   const d = curDog(); let h = heroCard();
   if (d.epi && !readonly && !liveRec()) h += `<button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>`;
+  h += homeTiles();
   if (!readonly) h += pillsCard();
-  if (d.epi) {
-    const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3);
-    const prev = m2.total - m.total, diff = m.total - prev;
-    const trend = diff > 0 ? `<em class="up">▲ ${diff} rispetto al mese scorso</em>` : diff < 0 ? `<em class="down">▼ ${-diff} rispetto al mese scorso</em>` : `<em>come il mese scorso</em>`;
-    h += `<div class="tiles">
-      <div class="glass tile"><small>Questo mese</small><b>${m.total}</b><span>${m.total === 1 ? 'crisi' : 'crisi'}</span>${trend}</div>
-      <div class="glass tile"><small>Ultimi 3 mesi</small><b>${fmtNum(q.alMese)}</b><span>crisi al mese</span><em>${plural(q.total, 'crisi', 'crisi')} in tutto</em></div>
-      <div class="glass tile"><small>Ultima crisi</small><b class="sm">${q.last || m.last ? esc(fmtDate((m.last || q.last).data.date)) : '—'}</b><span>${m.last ? since(m.last.data.date) : ''}</span></div>
-      <div class="glass tile"><small>Durata media</small><b class="sm">${fmtDur(q.durMedia) || '—'}</b><span>ultimi 3 mesi</span></div>
-    </div>`;
-  } else {
-    const probs = list(dog, 'salute').filter(r => r.data.risolto !== 'Risolto').length, v = list(dog, 'visita')[0];
-    h += `<div class="tiles">
-      <div class="glass tile"><small>Problemi</small><b>${probs}</b><span>in corso</span></div>
-      <div class="glass tile"><small>Ultima visita</small><b class="sm">${v ? esc(fmtDate(v.data.date)) : '—'}</b><span>${v ? since(v.data.date) : ''}</span></div>
-    </div>`;
-  }
   h += section('Terapia in corso', therapyCards(dog));
   const up = upcoming(dog).slice(0, 4);
-  if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>tra ${plural(daysBetween(new Date(), toDate(due)), 'giorno', 'giorni')}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`);
+  if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>tra ${plural(daysBetween(new Date(), toDate(due)), 'giorno', 'giorni')}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`, `<button class="link" data-ics="up">📅</button>`);
   h += section('Ultime voci', listHTML(list(dog).filter(r => r.data.date <= today()).slice(0, 5), 'Tocca + per aggiungere la prima voce'), `<button class="link" data-goto="diario">Vedi tutto</button>`);
   return h;
 }

@@ -362,3 +362,14 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .ag-dose.col{border-color:color-mix(in srgb,var(--dc) 55%,transparent);background:color-mix(in srgb,var(--dc) 16%,var(--glass2))}
 .ag-dose.col em{font-weight:600}
 .legend.phase{padding:10px 4px 2px;border-top:1px solid var(--line);margin-top:4px;gap:8px 14px}
+
+/* riquadri del riepilogo */
+.tiles .tile:last-child:nth-child(odd){grid-column:1/-1}
+.tile.tap{cursor:pointer}
+.tile.warn{border-color:color-mix(in srgb,#f5a623 55%,transparent);background:linear-gradient(160deg,color-mix(in srgb,#f5a623 16%,var(--glass)),var(--glass))}
+.tile.warn small{color:#f5a623}
+.tile b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile i.up{color:#ff5f7e;font-style:normal}.tile i.down{color:var(--ok);font-style:normal}
+.tile i.bar{display:block;height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
+.tile i.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.tile b.sm{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
