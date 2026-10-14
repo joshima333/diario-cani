@@ -51,11 +51,11 @@ const KINDS = {
     fields: [
       { k: 'date', l: 'Giorno', t: 'date' },
       { k: 'tipo', l: 'Tipo', t: 'select', o: ['Emocromo + biochimico', 'Livello fenobarbital nel sangue', 'Livello bromuro', 'Funzionalità epatica', 'Urine', 'Tiroide', 'Ecografia', 'Altro'] },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'valore', l: 'Valore principale', t: 'text', ph: 'es. 28 µg/ml' },
       { k: 'esito', l: 'Esito', t: 'select', o: ['Nella norma', 'Da controllare', 'Alterato'] },
       { k: 'risultati', l: 'Risultati / valori fuori norma', t: 'area' },
       { k: 'prossime', l: 'Prossime analisi', t: 'date' },
-      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'docs', l: 'Foto del referto', t: 'docs' },
     ],
     title: d => d.tipo || 'Analisi',
@@ -66,8 +66,8 @@ const KINDS = {
     fields: [
       { k: 'date', l: 'Giorno', t: 'date' },
       { k: 'nome', l: 'Cosa', t: 'text', ph: 'es. Polivalente, Rabbia, Leishmania', list: 'vaccini' },
-      { k: 'richiamo', l: 'Prossimo richiamo', t: 'date' },
       { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
+      { k: 'richiamo', l: 'Prossimo richiamo', t: 'date' },
       { k: 'note', l: 'Note', t: 'area' },
     ],
     title: d => d.nome || 'Vaccino',
@@ -158,10 +158,10 @@ const KINDS = {
     fields: [
       { k: 'date', l: 'Giorno', t: 'date' },
       { k: 'motivo', l: 'Motivo', t: 'text', ph: 'es. controllo epilessia' },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'peso', l: 'Peso (kg)', t: 'num', step: '0.1' },
       { k: 'esito', l: 'Cosa ha detto il veterinario', t: 'area' },
       { k: 'prossima', l: 'Prossima visita', t: 'date' },
-      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'docs', l: 'Foto (ricette, libretto…)', t: 'docs' },
     ],
     title: d => d.motivo || 'Visita',
@@ -442,7 +442,7 @@ function viewHome() {
   if (d.epi && !readonly && !liveRec()) h += `<button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>`;
   h += homeTiles();
   if (!readonly) h += pillsCard();
-  if (d.epi && !readonly) h += dayLogCard();
+  if (!readonly) h += dayLogCard();
   h += recurringCard();
   h += section('Terapia in corso', therapyCards(dog));
   h += stockCard();
@@ -509,7 +509,7 @@ function viewStats() {
   const pesi = list(dog, 'visita').filter(r => r.data.peso).slice(0, 6);
   if (pesi.length > 1) h += chartCard('Peso', 'Dalle visite', lineChart(pesi.slice().reverse().map(r => ({ x: toDate(r.data.date), y: +r.data.peso, l: fmtDate(r.data.date) })), COLORS.visita, ' kg'));
   else if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div class="kv"><span>${esc(fmtDate(r.data.date))}</span><b>${esc(fmtNum(+r.data.peso))} kg</b></div>`).join('')}</div>`;
-  if (d.epi) h += factorsCard();
+  h += factorsCard();
   h += expensesCard();
   h += `<div class="glass card"><h2>Voci registrate</h2>${hbars(countBy(rs, r => KINDS[r.kind].name))}</div>`;
   return h;
@@ -778,6 +778,15 @@ view.addEventListener('click', e => {
   if (id === 'csv') return exportCSV();
 });
 addEventListener('scroll', () => document.body.classList.toggle('scrolled', scrollY > 8), { passive: true });
+const APP_V = (document.querySelector('script[src^="app.js"]')?.src.match(/v=(\d+)/) || [])[1];
+async function checkUpdate() {
+  try {
+    const html = await (await fetch('./?u=' + Date.now(), { cache: 'no-store' })).text(), v = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+    if (APP_V && v && v !== APP_V && !liveRec() && !document.querySelector('dialog[open]')) location.reload();
+  } catch {}
+}
+checkUpdate();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
 addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 
@@ -1227,7 +1236,7 @@ function dayLogCard() {
   return section('Com\'è andata la giornata?', `<div class="glass card daylog">
     <div class="dl-nav"><button class="link" data-logday="-1">‹</button><b>${esc(label)}</b><button class="link" data-logday="1" ${day >= today() ? 'disabled' : ''}>›</button></div>
     <div class="chips">${FATTORI.map(f => `<label><input type="checkbox" data-factor="${esc(f)}"${on.has(f) ? ' checked' : ''}><span>${esc(f)}</span></label>`).join('')}</div>
-    <p class="small muted">Bastano pochi secondi al giorno: col tempo in Statistiche vedrai se le crisi arrivano più spesso dopo certe situazioni.</p></div>`);
+    <p class="small muted">Bastano pochi secondi al giorno: col tempo in Statistiche vedrai se ${curDog().epi ? 'le crisi arrivano' : 'i problemi di salute arrivano'} più spesso dopo certe situazioni.</p></div>`);
 }
 function toggleFactor(f) {
   const day = logDay || today(), r = dayLog(dog, day) || { id: uuid(), dog, kind: 'giorno', data: { date: day, fattori: [] } };
@@ -1237,14 +1246,15 @@ function toggleFactor(f) {
 }
 // confronto: dopo un certo fattore, quante volte arriva una crisi entro il giorno dopo, rispetto al solito
 function factorsCard() {
-  const logs = list(dog, 'giorno').filter(r => r.data.fattori?.length); if (logs.length < 7) return `<div class="glass card"><h2>Possibili fattori scatenanti</h2><p class="muted small">Segna nel Riepilogo com'è andata ogni giornata. Dopo almeno una settimana di dati (ora: ${plural(logs.length, 'giorno', 'giorni')}) qui vedrai se qualche situazione porta più crisi.</p></div>`;
-  const crisisDays = new Set(list(dog, 'crisi').map(r => r.data.date));
+  const logs = list(dog, 'giorno').filter(r => r.data.fattori?.length); if (logs.length < 7) return `<div class="glass card"><h2>Possibili fattori scatenanti</h2><p class="muted small">Segna nel Riepilogo com'è andata ogni giornata. Dopo almeno una settimana di dati (ora: ${plural(logs.length, 'giorno', 'giorni')}) qui vedrai se qualche situazione porta più ${curDog().epi ? 'crisi' : 'problemi di salute'}.</p></div>`;
+  const ev = curDog().epi ? 'crisi' : 'salute', evName = curDog().epi ? 'crisi' : 'problema di salute';
+  const crisisDays = new Set(list(dog, ev).map(r => r.data.date));
   const hit = day => crisisDays.has(day) || crisisDays.has(dayAdd(day, 1));
   const base = logs.filter(r => hit(r.data.date)).length / logs.length;
   const rows = FATTORI.filter(f => !f.startsWith('✅')).map(f => { const ds = logs.filter(r => r.data.fattori.includes(f)); return { f, n: ds.length, p: ds.length ? ds.filter(r => hit(r.data.date)).length / ds.length : 0 }; }).filter(x => x.n >= 3).sort((a, b) => b.p - a.p);
-  return `<div class="glass card"><div class="card-h"><h2>Possibili fattori scatenanti</h2><small>Crisi entro il giorno dopo · di solito nel ${Math.round(base * 100)}% dei giorni</small></div>
+  return `<div class="glass card"><div class="card-h"><h2>Possibili fattori scatenanti</h2><small>${curDog().epi ? 'Crisi' : 'Problemi di salute'} entro il giorno dopo · di solito nel ${Math.round(base * 100)}% dei giorni</small></div>
     ${rows.length ? rows.map(x => `<div class="hb"><div><span>${esc(x.f)} <small class="muted">(${plural(x.n, 'giorno', 'giorni')})</small></span><b class="${x.p >= base * 2 && x.p > 0 ? 'hot' : ''}">${Math.round(x.p * 100)}%</b></div><i><i style="width:${x.p * 100}%;background:${x.p >= base * 2 && x.p > 0 ? COLORS.crisi : COLORS.terapia}"></i></i></div>`).join('') : '<p class="muted small">Servono almeno 3 giorni per ogni situazione.</p>'}
-    <p class="muted small">In rosso le situazioni con almeno il doppio delle crisi rispetto al solito. È solo un indizio da mostrare al veterinario, non una diagnosi.</p></div>`;
+    <p class="muted small">In rosso le situazioni con almeno il doppio ${curDog().epi ? 'delle crisi' : 'dei problemi'} rispetto al solito. È solo un indizio da mostrare al veterinario, non una diagnosi.</p></div>`;
 }
 
 // ---------- spese veterinarie ----------
