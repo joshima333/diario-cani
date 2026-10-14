@@ -638,7 +638,7 @@ function render() {
   $('#title').textContent = tab === 'home' && !readonly ? greeting() : TITLES[tab]();
   $('#subtitle').textContent = tab === 'home' && !readonly ? subtitleText() : '';
   const live = liveRec();
-  setTimeout(popTicked, 0); setTimeout(makeAppIcon, 0);
+  setTimeout(popTicked, 0);
   $('#view').innerHTML = (live ? liveHTML(live) : '') + { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
   $('#gear').hidden = readonly; $('#fab').hidden = readonly;
   loadDocThumbs($('#view'));
