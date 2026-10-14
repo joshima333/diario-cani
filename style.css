@@ -341,3 +341,9 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .ag-dose span{width:20px;height:20px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:800;border:1.5px solid var(--line)}
 .ag-dose.ok{color:var(--muted)}.ag-dose.ok span{background:var(--ok);border-color:var(--ok);color:#fff}
 .ag-dose.miss span{border-color:#f5a623;color:#f5a623}
+.pill-row{cursor:pointer}
+.skipb{border:0;background:none;color:var(--muted);font-size:.9rem;padding:4px 6px;margin-left:2px;border-radius:8px}
+.pill-row{grid-template-columns:30px 52px 1fr auto auto}
+.pill-row.skip .pw{color:var(--muted);text-decoration:line-through}.pill-row.skip .chk{border-style:dashed}
+.ag-dose{cursor:pointer}.ag-dose em{flex:1;font-style:normal}
+.ag-dose.skip{color:var(--muted);text-decoration:line-through}.ag-dose.skip span{border-style:dashed}

@@ -650,7 +650,7 @@ $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
-  const pl = e.target.closest('[data-pill]'); if (pl) return togglePill(pl.dataset.pill, pl.dataset.day);
+  const pl = e.target.closest('[data-pill]'); if (pl) return e.target.closest('[data-skip]') ? skipPill(pl.dataset.pill, pl.dataset.day) : togglePill(pl.dataset.pill, pl.dataset.day);
   if (e.target.closest('[data-prog]')) return openForm('programma', records[progId(dog)] || { id: progId(dog), dog, kind: 'programma', data: {} });
   if (e.target.closest('[data-ics]')) return e.target.closest('[data-ics]').dataset.ics === 'pills' ? icsPills() : icsUpcoming();
   if (readonly && !e.target.closest('[data-filter],[data-range],[data-goto],#pdf,#csv')) return;
@@ -747,9 +747,9 @@ function pillsCard() {
   const taken = dosesOn(dog, t), now = nowTime();
   const done = sl.filter(s => taken.some(r => r.data.slot === slotKey(s))).length;
   return section('Pastiglie di oggi', `<div class="glass list pills">${sl.map(s => {
-    const r = taken.find(x => x.data.slot === slotKey(s)), late = !r && s.t < now;
-    return `<button class="pill-row${r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}" data-day="${t}"><span class="chk">${r ? '✓' : ''}</span>
-      <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small></button>`;
+    const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, late = !r && s.t < now;
+    return `<div class="pill-row${sk ? ' skip' : r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}" data-day="${t}"><span class="chk">${sk ? '–' : r ? '✓' : ''}</span>
+      <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${sk ? 'non data' : r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`;
   }).join('')}</div><div class="pills-f"><button class="link" data-prog>Orari fissi</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`) + agendaCard();
 }
 // calendario delle terapie a tempo: un giorno per riga, con le dosi da spuntare
@@ -765,9 +765,13 @@ function agendaCard() {
   return section('Calendario terapie', `<div class="glass agenda">${days.map(day => {
     const sl = slotsFor(dog, day), taken = dosesOn(dog, day), dt = toDate(day);
     return `<div class="ag-day${day === t ? ' today' : ''}${day < t ? ' past' : ''}"><div class="ag-d"><b>${dt.getDate()}</b><small>${dt.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}</small></div>
-      <div class="ag-l">${sl.map(s => { const ok = taken.some(r => r.data.slot === slotKey(s)), miss = !ok && (day < t || (day === t && s.t < nowTime()));
-        return `<button class="ag-dose${ok ? ' ok' : miss ? ' miss' : ''}" data-pill="${esc(slotKey(s))}" data-day="${day}"><span>${ok ? '✓' : miss ? '!' : '○'}</span>${s.t} ${esc(s.what)}</button>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
+      <div class="ag-l">${sl.map(s => { const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, ok = r && !sk, miss = !r && (day < t || (day === t && s.t < nowTime()));
+        return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}" data-pill="${esc(slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
   }).join('')}</div>`, `<span class="count">fino al ${esc(fmtDate(rg.to))}</span>`);
+}
+function skipPill(key, day = today()) {
+  const r = { id: uuid(), dog, kind: 'dose', data: { date: day, time: nowTime(), slot: key, skip: true } };
+  save(r); toast('Segnata come non data', { label: 'Annulla', fn: () => { r.deleted = true; save(r); } });
 }
 function togglePill(key, day = today()) {
   const r = dosesOn(dog, day).find(x => x.data.slot === key);
@@ -779,8 +783,9 @@ function adherence(d, days = 30) {
   for (let i = days - 1; i >= 0; i--) {
     const day = dayAdd(t, -i), sl = slotsFor(d, day).filter(s => day < t || s.t <= nowTime());
     if (!sl.length) continue; first ||= day;
-    const taken = new Set(dosesOn(d, day).map(r => r.data.slot));
-    expected += sl.length; got += sl.filter(s => taken.has(slotKey(s))).length;
+    const recs = dosesOn(d, day), skipped = new Set(recs.filter(r => r.data.skip).map(r => r.data.slot)), taken = new Set(recs.filter(r => !r.data.skip).map(r => r.data.slot));
+    const due = sl.filter(s => !skipped.has(slotKey(s)));
+    expected += due.length; got += due.filter(s => taken.has(slotKey(s))).length;
   }
   if (!expected) return null;
   return { pct: Math.round(got / expected * 100), missed: expected - got, days: daysBetween(toDate(first), toDate(t)) + 1 };
