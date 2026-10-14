@@ -34,7 +34,10 @@ const KINDS = {
       { k: 'dose', l: 'Dose', t: 'text', ph: 'es. 30' },
       { k: 'unita', l: 'Unità', t: 'select', o: ['mg', 'ml', 'compresse', 'gocce', 'mg/kg'] },
       { k: 'freq', l: 'Quante volte', t: 'select', o: ['1 volta al giorno', '2 volte al giorno', '3 volte al giorno', 'Al bisogno', 'Altro'] },
-      { k: 'orari', l: 'Orari', t: 'text', ph: 'es. 8:00 e 20:00' },
+      { k: 'orari', l: 'Orari', t: 'text', ph: 'es. 08:00 e 20:00' },
+      { k: 'fine', l: 'Fino al (compreso) — se è una cura a tempo', t: 'date' },
+      { k: 'primaOra', l: 'Primo giorno: prima dose alle', t: 'time' },
+      { k: 'ultimaOra', l: 'Ultimo giorno: ultima dose alle', t: 'time' },
       { k: 'sospeso', l: 'Stato', t: 'select', o: ['In corso', 'Sospeso'] },
       { k: 'motivo', l: 'Motivo del cambio', t: 'text' },
       { k: 'note', l: 'Note', t: 'area' },
@@ -202,7 +205,8 @@ const since = date => { const n = daysBetween(toDate(date), new Date()); return 
 const drugKey = f => (f || '').trim().toLowerCase().split(/\s+/)[0];
 function currentTherapy(d) {
   const seen = {}, out = [];
-  for (const r of list(d, 'terapia')) { const k = drugKey(r.data.farmaco); if (seen[k]) continue; seen[k] = 1; if (r.data.sospeso !== 'Sospeso') out.push(r); }
+  const t = today();
+  for (const r of list(d, 'terapia')) { if (r.data.date > t) continue; const k = drugKey(r.data.farmaco); if (seen[k]) continue; seen[k] = 1; if (r.data.sospeso !== 'Sospeso' && !(r.data.fine && r.data.fine < t)) out.push(r); }
   return out;
 }
 function upcoming(d) {
@@ -295,7 +299,12 @@ function therapyCards(d) {
   if (!th.length) return `<div class="glass list"><div class="empty">Nessuna terapia in corso<br><small>Aggiungila con il tasto +</small></div></div>`;
   return `<div class="drugs">${th.map(r => { const x = r.data; return `<div class="glass drug" data-id="${r.id}" style="--c:${COLORS.terapia}">
     <div class="drug-h"><span class="ic" style="--c:${COLORS.terapia}">💊</span><div><b>${esc(x.farmaco || 'Farmaco')}</b><small>dal ${esc(fmtDate(x.date))}</small></div></div>
-    <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}</div></div>`; }).join('')}</div>`;
+    <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}${x.fine ? `<span>fino al ${esc(fmtDate(x.fine))}</span>` : ''}</div>
+    ${nextChange(d, r) ? `<p class="next">↪ ${nextChange(d, r)}</p>` : ''}</div>`; }).join('')}</div>`;
+}
+function nextChange(d, cur) {
+  const k = drugKey(cur.data.farmaco), n = list(d, 'terapia').filter(r => drugKey(r.data.farmaco) === k && r.data.date > today()).pop();
+  return n ? `dal ${esc(fmtDate(n.data.date))}: ${esc(n.data.sospeso === 'Sospeso' ? 'sospeso' : [n.data.dose, n.data.unita].filter(Boolean).join(' '))}` : '';
 }
 function heroCard() {
   const d = curDog(), p = profile(dog);
@@ -336,7 +345,7 @@ function viewHome() {
   h += section('Terapia in corso', therapyCards(dog));
   const up = upcoming(dog).slice(0, 4);
   if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>tra ${plural(daysBetween(new Date(), toDate(due)), 'giorno', 'giorni')}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`);
-  h += section('Ultime voci', listHTML(list(dog).slice(0, 5), 'Tocca + per aggiungere la prima voce'), `<button class="link" data-goto="diario">Vedi tutto</button>`);
+  h += section('Ultime voci', listHTML(list(dog).filter(r => r.data.date <= today()).slice(0, 5), 'Tocca + per aggiungere la prima voce'), `<button class="link" data-goto="diario">Vedi tutto</button>`);
   return h;
 }
 
@@ -641,7 +650,7 @@ $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
-  const pl = e.target.closest('[data-pill]'); if (pl) return togglePill(pl.dataset.pill);
+  const pl = e.target.closest('[data-pill]'); if (pl) return togglePill(pl.dataset.pill, pl.dataset.day);
   if (e.target.closest('[data-prog]')) return openForm('programma', records[progId(dog)] || { id: progId(dog), dog, kind: 'programma', data: {} });
   if (e.target.closest('[data-ics]')) return e.target.closest('[data-ics]').dataset.ics === 'pills' ? icsPills() : icsUpcoming();
   if (readonly && !e.target.closest('[data-filter],[data-range],[data-goto],#pdf,#csv')) return;
@@ -705,36 +714,76 @@ function liveAction(a) {
 
 // ---------- pastiglie ----------
 const progId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000001a' : '00000000001b');
-function slotsOf(d) {
+const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayAdd = (iso, n) => { const d = toDate(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+// orari scritti liberamente: "08:00 e 20:00", "alle 8 e alle 20"
+const timesIn = s => [...new Set([...String(s || '').matchAll(/(\d{1,2})(?:[:.](\d{2}))?/g)].map(m => +m[1] < 24 ? `${pad(+m[1])}:${m[2] || '00'}` : null).filter(Boolean))].sort();
+const doseLabel = x => [x.farmaco, x.dose && `${x.dose}${x.unita && x.unita !== 'compresse' ? ' ' + x.unita : x.dose === '1' ? ' compressa' : x.unita === 'compresse' ? ' cpr' : ''}`].filter(Boolean).join(' ');
+function programSlots(d) {
   return (records[progId(d)]?.deleted ? '' : records[progId(d)]?.data.slots || '').split('\n').map(l => l.trim().match(/^(\d{1,2})[:.](\d{2})\s+(.+)$/)).filter(Boolean)
-    .map(m => ({ t: `${pad(+m[1])}:${m[2]}`, what: m[3] })).sort((a, b) => a.t.localeCompare(b.t));
+    .map(m => ({ t: `${pad(+m[1])}:${m[2]}`, what: m[3] }));
+}
+// dosi di un giorno: orari fissi + terapie con orari precisi (es. antibiotico per una settimana, cortisone a scalare)
+function slotsFor(d, day) {
+  const latest = {};
+  for (const r of list(d, 'terapia').slice().reverse()) if (r.data.date <= day) latest[drugKey(r.data.farmaco)] = r;
+  const out = programSlots(d);
+  for (const r of Object.values(latest)) {
+    const x = r.data;
+    if (x.sospeso === 'Sospeso' || (x.fine && day > x.fine)) continue;
+    for (const t of timesIn(x.orari)) {
+      if (day === x.date && x.primaOra && t < x.primaOra) continue;
+      if (day === x.fine && x.ultimaOra && t > x.ultimaOra) continue;
+      out.push({ t, what: doseLabel(x), ther: r.id });
+    }
+  }
+  return out.sort((a, b) => a.t.localeCompare(b.t));
 }
 const slotKey = s => `${s.t} ${s.what}`;
 const dosesOn = (d, date) => list(d, 'dose').filter(r => r.data.date === date);
 function pillsCard() {
-  const sl = slotsOf(dog);
-  if (!sl.length) return curDog().epi || currentTherapy(dog).length ? `<button class="glass card setup" data-prog><span class="ic" style="--c:${COLORS.terapia}">⏰</span><div><b>Imposta gli orari delle pastiglie</b><small>Per spuntarle ogni giorno e non saltarne nessuna</small></div></button>` : '';
-  const t = today(), taken = dosesOn(dog, t), now = nowTime();
+  const t = today(), sl = slotsFor(dog, t);
+  if (!sl.length) return curDog().epi && !records[progId(dog)] ? `<button class="glass card setup" data-prog><span class="ic" style="--c:${COLORS.terapia}">⏰</span><div><b>Imposta gli orari delle pastiglie</b><small>Per spuntarle ogni giorno e non saltarne nessuna</small></div></button>` : '';
+  const taken = dosesOn(dog, t), now = nowTime();
   const done = sl.filter(s => taken.some(r => r.data.slot === slotKey(s))).length;
   return section('Pastiglie di oggi', `<div class="glass list pills">${sl.map(s => {
     const r = taken.find(x => x.data.slot === slotKey(s)), late = !r && s.t < now;
-    return `<button class="pill-row${r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}"><span class="chk">${r ? '✓' : ''}</span>
+    return `<button class="pill-row${r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}" data-day="${t}"><span class="chk">${r ? '✓' : ''}</span>
       <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small></button>`;
-  }).join('')}</div><div class="pills-f"><button class="link" data-prog>Modifica orari</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`);
+  }).join('')}</div><div class="pills-f"><button class="link" data-prog>Orari fissi</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`) + agendaCard();
 }
-function togglePill(key) {
-  const t = today(), r = dosesOn(dog, t).find(x => x.data.slot === key);
+// calendario delle terapie a tempo: un giorno per riga, con le dosi da spuntare
+function courseRange(d) {
+  const cs = list(d, 'terapia').filter(r => r.data.fine && timesIn(r.data.orari).length && r.data.fine >= dayAdd(today(), -3) && r.data.sospeso !== 'Sospeso');
+  if (!cs.length) return null;
+  return { from: cs.reduce((m, r) => r.data.date < m ? r.data.date : m, '9999'), to: cs.reduce((m, r) => r.data.fine > m ? r.data.fine : m, '0000') };
+}
+function agendaCard() {
+  const rg = courseRange(dog); if (!rg) return '';
+  const t = today(), days = [];
+  for (let d = rg.from < dayAdd(t, -3) ? dayAdd(t, -3) : rg.from; d <= rg.to && days.length < 31; d = dayAdd(d, 1)) days.push(d);
+  return section('Calendario terapie', `<div class="glass agenda">${days.map(day => {
+    const sl = slotsFor(dog, day), taken = dosesOn(dog, day), dt = toDate(day);
+    return `<div class="ag-day${day === t ? ' today' : ''}${day < t ? ' past' : ''}"><div class="ag-d"><b>${dt.getDate()}</b><small>${dt.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}</small></div>
+      <div class="ag-l">${sl.map(s => { const ok = taken.some(r => r.data.slot === slotKey(s)), miss = !ok && (day < t || (day === t && s.t < nowTime()));
+        return `<button class="ag-dose${ok ? ' ok' : miss ? ' miss' : ''}" data-pill="${esc(slotKey(s))}" data-day="${day}"><span>${ok ? '✓' : miss ? '!' : '○'}</span>${s.t} ${esc(s.what)}</button>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
+  }).join('')}</div>`, `<span class="count">fino al ${esc(fmtDate(rg.to))}</span>`);
+}
+function togglePill(key, day = today()) {
+  const r = dosesOn(dog, day).find(x => x.data.slot === key);
   if (r) { r.deleted = true; save(r); return toast('Tolta la spunta', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } }); }
-  save({ id: uuid(), dog, kind: 'dose', data: { date: t, time: nowTime(), slot: key } }); navigator.vibrate?.(30);
+  save({ id: uuid(), dog, kind: 'dose', data: { date: day, time: day === today() ? nowTime() : key.slice(0, 5), slot: key } }); navigator.vibrate?.(30);
 }
 function adherence(d, days = 30) {
-  const sl = slotsOf(d), prog = records[progId(d)]; if (!sl.length || !prog) return null;
-  const start = new Date(Math.max(toDate(prog.data.date || today()) - 0, Date.now() - (days - 1) * DAY));
-  const n = Math.max(1, daysBetween(toDate(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`), toDate(today())) + 1);
-  const from = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const keys = new Set(sl.map(slotKey)), got = new Set(list(d, 'dose').filter(r => r.data.date >= from && keys.has(r.data.slot)).map(r => r.data.date + r.data.slot));
-  const expected = sl.length * n - sl.filter(s => s.t > nowTime()).length;
-  return { pct: Math.min(100, Math.round(got.size / Math.max(1, expected) * 100)), missed: Math.max(0, expected - got.size), days: n };
+  const t = today(); let expected = 0, got = 0, first = null;
+  for (let i = days - 1; i >= 0; i--) {
+    const day = dayAdd(t, -i), sl = slotsFor(d, day).filter(s => day < t || s.t <= nowTime());
+    if (!sl.length) continue; first ||= day;
+    const taken = new Set(dosesOn(d, day).map(r => r.data.slot));
+    expected += sl.length; got += sl.filter(s => taken.has(slotKey(s))).length;
+  }
+  if (!expected) return null;
+  return { pct: Math.round(got / expected * 100), missed: expected - got, days: daysBetween(toDate(first), toDate(t)) + 1 };
 }
 function adherenceText(d) {
   const a = adherence(d); if (!a) return '';
@@ -751,8 +800,11 @@ function icsFile(events, name) {
   const a = document.createElement('a'); a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n')); a.download = name; a.click();
 }
 function icsPills() {
-  const t = today(), name = curDog().name;
-  icsFile(slotsOf(dog).map(s => ({ start: `${t}T${s.t}:00`, end: `${t}T${s.t}:00`, daily: true, title: `💊 ${name}: ${s.what}` })), `pastiglie-${dog}.ics`);
+  const t = today(), name = curDog().name, ev = programSlots(dog).map(s => ({ start: `${t}T${s.t}:00`, daily: true, title: `💊 ${name}: ${s.what}` }));
+  const rg = courseRange(dog), now = nowTime();
+  if (rg) for (let d = t; d <= rg.to; d = dayAdd(d, 1)) for (const s of slotsFor(dog, d)) if (s.ther && (d > t || s.t >= now)) ev.push({ start: `${d}T${s.t}:00`, title: `💊 ${name}: ${s.what}` });
+  if (!ev.length) return toast('Nessuna pastiglia da ricordare');
+  icsFile(ev, `pastiglie-${dog}.ics`);
 }
 function icsUpcoming() {
   const name = curDog().name;
