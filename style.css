@@ -373,3 +373,14 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .tile i.bar{display:block;height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:4px}
 .tile i.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .tile b.sm{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+/* ricerca, dosi modificate, scorte, fasce terapia */
+.search{display:flex;align-items:center;gap:8px;padding:4px 12px;margin-bottom:12px;border-radius:16px}
+.search input{border:0;background:none;padding:10px 0;box-shadow:none!important}
+.pill-row,.ag-dose{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.pill-row.mod .pw::after,.ag-dose.mod em::after{content:" ✎";color:var(--accent)}
+.dt b.warn{color:#f5a623}
+.bands{margin-top:6px}
+.bands .bn{fill:var(--muted);font-size:8.5px;font-weight:700}
+.bands .bl{fill:#fff;font-size:7.5px;font-weight:700}
+#print .bands .bl{fill:#000}
