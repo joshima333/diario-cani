@@ -14,10 +14,12 @@ const KINDS = {
     fields: [
       { k: 'date', l: 'Giorno', t: 'date' }, { k: 'time', l: 'Ora', t: 'time' },
       { k: 'quante', l: 'Quante crisi (nello stesso episodio)', t: 'num', def: 1 },
-      { k: 'dur', l: 'Durata (min e sec)', t: 'dur' },
+      { k: 'dur', l: 'Durata delle scosse (min e sec)', t: 'dur', store: 'durSec' },
       { k: 'tipo', l: 'Tipo', t: 'select', o: ['Generalizzata (tonico-clonica)', 'Focale', 'Focale → generalizzata', 'Assenza / lieve', 'Non so'] },
       { k: 'intensita', l: 'Intensità', t: 'stars' },
-      { k: 'post', l: 'Fase post-crisi (minuti)', t: 'num' },
+      { k: 'terra', l: 'Dopo: a terra, ferma (min e sec)', t: 'dur', store: 'terraSec' },
+      { k: 'vaga', l: 'Dopo: in piedi ma vaga / non vede (min e sec)', t: 'dur', store: 'vagaSec' },
+      { k: 'post', l: 'Ripresa totale (minuti)', t: 'num' },
       { k: 'sintomi', l: 'Com\'è stata', t: 'chips', o: SINTOMI },
       { k: 'trigger', l: 'Possibile causa', t: 'chips', o: TRIGGER },
       { k: 'emergenza', l: 'Farmaco d\'emergenza dato', t: 'text', ph: 'es. Ziepam 1 mg' },
@@ -359,7 +361,7 @@ function itemHTML(r, { swipe = !readonly } = {}) {
   const k = KINDS[r.kind], d = r.data, q = +d.quante || 1;
   const extra = (d.docs?.length ? ' <span class="clip">📎</span>' : '') + (d.video?.startsWith('Sì') ? ' <span class="clip">📹</span>' : '');
   const title = (r.kind === 'crisi' ? `Crisi${q > 1 ? ` <span class="badge">×${q}</span>` : ''}` : esc(titleOf(r))) + extra;
-  const sub = r.kind === 'crisi' ? [fmtDur(d.durSec), d.tipo && d.tipo.replace(' (tonico-clonica)', '')].filter(Boolean).join(' · ') : k.sum(d);
+  const sub = r.kind === 'crisi' ? [fmtDur(d.durSec), d.terraSec && 'a terra ' + fmtDur(d.terraSec), d.vagaSec && 'vaga ' + fmtDur(d.vagaSec), !d.terraSec && !d.vagaSec && d.tipo && d.tipo.replace(' (tonico-clonica)', '')].filter(Boolean).join(' · ') : k.sum(d);
   const cost = +d.costo > 0 && r.kind !== 'spesa' ? ` · ${euro(d.costo)}` : '';
   const row = `<div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${k.ic}</div>
     <div class="tx"><b>${title}</b><small>${esc(sub) + cost || (r.kind === 'crisi' && d.note ? esc(d.note) : '&nbsp;')}</small>${r.kind === 'crisi' ? dots(d.intensita) : ''}</div>
@@ -584,7 +586,7 @@ function reportHTML() {
   h += `<section><h2>Terapia in corso</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
   if (d.epi) h += `<section><h2>Crisi con ogni terapia</h2>${table(therapyPeriods(dog).map(x => ({ data: x })), [['Periodo', x => `${fmtDate(x.from)} → ${x.to ? fmtDate(x.to) : 'oggi'}`], ['Terapia', x => x.label], ['Crisi', x => x.n], ['Al mese', x => fmtNum(x.rate)]])}</section>`;
   h += `<section><h2>Storia della terapia</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Note', x => [x.motivo, x.note].filter(Boolean).join(' — ')]])}</section>`;
-  if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Intensità', x => x.intensita ? x.intensita + '/5' : ''], ['Ripresa', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Farmaco emergenza', x => x.emergenza], ['Note', x => x.note]])}</section>`;
+  if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Intensità', x => x.intensita ? x.intensita + '/5' : ''], ['A terra', x => fmtDur(x.terraSec)], ['Vaga', x => fmtDur(x.vagaSec)], ['Ripresa', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Farmaco emergenza', x => x.emergenza], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Analisi</h2>${table(inR(list(dog, 'analisi')), [['Giorno', x => fmtDate(x.date)], ['Tipo', x => x.tipo], ['Valore', x => x.valore], ['Esito', x => x.esito], ['Risultati', x => x.risultati]])}</section>`;
   h += `<section><h2>Problemi di salute</h2>${table(inR(list(dog, 'salute')), [['Giorno', x => fmtDate(x.date)], ['Cosa', x => x.titolo], ['Farmaco', x => x.farmaco], ['Stato', x => x.risolto], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Visite</h2>${table(inR(list(dog, 'visita')), [['Giorno', x => fmtDate(x.date)], ['Motivo', x => x.motivo], ['Peso', x => x.peso ? x.peso + ' kg' : ''], ['Esito', x => x.esito]])}</section>`;
@@ -697,7 +699,7 @@ function fieldHTML(f, d) {
     case 'select': return lab + `<select name="${f.k}"><option value=""></option>${f.o.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     case 'chips': return lab + `<div class="chips">${f.o.map(o => `<label><input type="checkbox" name="${f.k}" value="${esc(o)}"${[].concat(v).includes(o) ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
     case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><div class="stars-l"><span>lieve</span><span>molto forte</span></div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
-    case 'dur': { const s = +d.durSec || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="durMin" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="durS" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
+    case 'dur': { const s = +d[f.store || 'durSec'] || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="${f.k}Min" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="${f.k}S" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
     case 'docs': return lab + `<div class="docs" data-docs>${[].concat(v || []).map(docThumb).join('')}<label class="doc-add">＋<input type="file" accept="image/*" multiple data-docfile hidden></label></div><input type="hidden" name="${f.k}" value="${esc(JSON.stringify([].concat(v || [])))}">`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
@@ -740,13 +742,13 @@ $('#frm').addEventListener('submit', e => {
   e.preventDefault();
   const fd = new FormData(e.target), data = {};
   for (const f of KINDS[editing.kind].fields) {
-    if (f.t === 'dur') { const s = (+fd.get('durMin') || 0) * 60 + (+fd.get('durS') || 0); if (s) data.durSec = s; continue; }
+    if (f.t === 'dur') { const s = (+fd.get(f.k + 'Min') || 0) * 60 + (+fd.get(f.k + 'S') || 0); if (s) data[f.store || 'durSec'] = s; continue; }
     if (f.t === 'chips') { const a = fd.getAll(f.k); if (a.length) data[f.k] = a; continue; }
     if (f.t === 'docs') { const a = JSON.parse(fd.get(f.k) || '[]'); if (a.length) data[f.k] = a; continue; }
     const v = (fd.get(f.k) || '').trim();
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
   }
-  for (const k of ['live', 'startTs', 'fine']) if (editing.data[k] != null && editing.kind === 'crisi') data[k] = editing.data[k];
+  for (const k of ['live', 'startTs', 'fine', 'phase', 'phaseTs', 'timeline', 'convs']) if (editing.data[k] != null && editing.kind === 'crisi') data[k] = editing.data[k];
   if (KINDS[editing.kind].hidden || KINDS[editing.kind].nodate) data.date ||= editing.data.date || today();
   if (!data.date) return toast('Inserisci il giorno');
   editing.data = data; save(editing); $('#form').close(); toast('Salvato ✓');
@@ -800,47 +802,85 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 addEventListener('online', sync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 
-// ---------- crisi in corso: cronometro ----------
+// ---------- crisi in corso: episodio a fasi ----------
+// 1) crisi (scosse) → 2) a terra, ferma → 3) in piedi ma vaga / non vede → tornata normale.
+// In qualsiasi momento "Nuova crisi" riparte dalla fase 1; ogni azione resta segnata con l'ora.
 const LIVE_MAX = 3 * 3600e3;
 const liveRec = () => Object.values(records).find(r => !r.deleted && r.kind === 'crisi' && r.data.live && Date.now() - r.data.startTs < LIVE_MAX);
-const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return s >= 3600 ? `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+const hms = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const PHASES = {
+  crisi: { n: 1, label: 'Crisi in corso', c: '#ff3b5c', next: '■ Fine scosse', hint: 'Premi quando smette di tremare' },
+  terra: { n: 2, label: 'A terra · ripresa', c: '#f59e0b', next: '↑ Si è rialzata', hint: 'Premi quando si rimette in piedi' },
+  vaga: { n: 3, label: 'In piedi · vaga, non vede', c: '#3b82f6', next: '✓ È tornata normale', hint: 'Premi quando ti riconosce e cammina normale' },
+};
+const QUICK = [['ziepam', '💊 Ziepam dato'], ['cibo', '🍖 Ha mangiato'], ['vede', '👀 Mi vede/sente'], ['sbatte', '💥 Sbatte contro le cose'], ['video', '📹 Video']];
+function liveState(d) { return { phase: d.phase || 'crisi', phaseTs: d.phaseTs || d.startTs, tl: d.timeline || [{ t: d.startTs, e: 'Crisi 1' }] }; }
 function liveHTML(r) {
-  const d = r.data, q = +d.quante || 1, name = DOGS.find(x => x.id === r.dog).name;
-  return `<div class="glass live" data-start="${d.startTs}">
-    <div class="live-h"><span class="pulse"></span>Crisi in corso · ${esc(name)}</div>
-    <div class="timer" id="liveTimer">${clock(Date.now() - d.startTs)}</div>
-    <small>iniziata alle ${esc(d.time)}${q > 1 ? ` · ${q} crisi` : ''}${d.emergenza ? ` · ${esc(d.emergenza)}` : ''}</small>
-    <button class="btn stop" data-live="stop">■ Fine crisi</button>
-    <div class="live-row"><button data-live="plus">＋1 crisi</button><button data-live="ziepam">💊 Ziepam dato</button><button data-live="video" class="${d.video ? 'on' : ''}">📹 Video</button></div>
-    <button class="link" data-live="cancel">Avviata per sbaglio? Annulla</button>
+  const d = r.data, q = +d.quante || 1, name = DOGS.find(x => x.id === r.dog).name, { phase, phaseTs, tl } = liveState(d), P = PHASES[phase];
+  return `<div class="glass live" style="--ph:${P.c}">
+    <div class="live-h"><span class="pulse"></span>${esc(name)} · ${P.label}${q > 1 ? ` · crisi n° ${q}` : ''}</div>
+    <div class="steps3">${Object.entries(PHASES).map(([k, x]) => `<span class="${k === phase ? 'on' : x.n < P.n ? 'done' : ''}" style="--c:${x.c}">${x.n}</span>`).join('<i></i>')}</div>
+    <div class="timer" data-since="${phaseTs}">${clock(Date.now() - phaseTs)}</div>
+    <small>episodio iniziato alle ${esc(d.time)} · totale <b data-since="${d.startTs}">${clock(Date.now() - d.startTs)}</b></small>
+    <button class="btn phase-next" data-live="next">${P.next}</button><p class="ph-hint">${P.hint}</p>
+    ${phase !== 'crisi' ? `<button class="btn again" data-live="again">⚡ Nuova crisi</button>` : ''}
+    <div class="live-row q5">${QUICK.map(([k, l]) => `<button data-live="ev:${k}" class="${k === 'video' && d.video ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="tlog">${tl.slice().reverse().slice(0, 6).map(x => `<div><b>${hms(x.t).slice(0, 5)}<small>${hms(x.t).slice(5)}</small></b><span>${esc(x.e)}</span></div>`).join('')}</div>
+    <div class="live-f"><button class="link" data-live="stop">Termina episodio</button><button class="link" data-live="cancel">Avviata per sbaglio</button></div>
   </div>`;
 }
 let wake = null;
 async function keepAwake(on) {
   try { if (on && !wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } else if (!on && wake) { await wake.release(); wake = null; } } catch {}
 }
-setInterval(() => {
-  const el = $('#liveTimer'); if (!el) return;
-  el.textContent = clock(Date.now() - +el.closest('.live').dataset.start);
-}, 500);
+setInterval(() => document.querySelectorAll('[data-since]').forEach(el => el.textContent = clock(Date.now() - +el.dataset.since)), 500);
+const EVTXT = { ziepam: 'Ziepam dato', cibo: 'Ha mangiato', vede: 'Mi vede / mi sente', sbatte: 'Sbatte contro le cose' };
+function finishLive(r, now, endLabel = 'Episodio finito') {
+  const d = r.data, s = liveState(d), tl = s.tl, add = (ph, ms) => d[ph + 'Sec'] = (d[ph + 'Sec'] || 0) + Math.round(ms / 1000);
+  if (s.phase === 'crisi') (d.convs ||= []).push(Math.max(1, Math.round((now - s.phaseTs) / 1000)));
+  else add(s.phase, now - s.phaseTs);
+  tl.push({ t: now, e: endLabel });
+  d.durSec = d.convs?.[0] || d.durSec || Math.max(1, Math.round((now - d.startTs) / 1000));
+  if (d.terraSec || d.vagaSec) d.post = Math.round(((d.terraSec || 0) + (d.vagaSec || 0)) / 60);
+  const zs = tl.filter(x => x.e === 'Ziepam dato').map(x => 'Ziepam alle ' + hms(x.t).slice(0, 5));
+  if (zs.length) d.emergenza = [...new Set([...(d.emergenza ? d.emergenza.split(', ') : []), ...zs])].join(', ');
+  const sint = new Set(d.sintomi || []);
+  if (d.vagaSec || tl.some(x => x.e === EVTXT.sbatte)) sint.add('Cecità temporanea'), sint.add('Disorientamento dopo');
+  if (tl.some(x => x.e === EVTXT.cibo)) sint.add('Fame/sete dopo');
+  d.sintomi = [...sint];
+  const conv = (d.convs || []).map((c, i) => `crisi ${i + 1}: ${fmtDur(c)}`).join(', ');
+  const ph = [d.terraSec && `a terra ${fmtDur(d.terraSec)}`, d.vagaSec && `vaga/non vede ${fmtDur(d.vagaSec)}`].filter(Boolean).join(', ');
+  d.note = [d.note && !/^Avviata dalla schermata/.test(d.note) ? d.note : '', [conv, ph].filter(Boolean).join(' · '), 'Cronologia: ' + tl.map(x => `${hms(x.t).slice(0, 5)} ${x.e}`).join(' → ')].filter(Boolean).join('\n');
+  delete d.live; delete d.phase; delete d.phaseTs; d.timeline = tl;
+}
 function liveAction(a) {
-  let r = liveRec();
+  let r = liveRec(); const now = Date.now();
   if (a === 'start') {
     if (r) return;
-    r = { id: uuid(), dog, kind: 'crisi', data: { date: today(), time: nowTime(), quante: 1, live: true, startTs: Date.now() } };
-    save(r); keepAwake(true); scrollTo(0, 0); navigator.vibrate?.(60);
-    return;
+    save({ id: uuid(), dog, kind: 'crisi', data: { date: today(), time: nowTime(), quante: 1, live: true, startTs: now, phase: 'crisi', phaseTs: now, timeline: [{ t: now, e: 'Crisi 1' }] } });
+    keepAwake(true); scrollTo(0, 0); navigator.vibrate?.(60); return;
   }
   if (!r) return;
-  if (a === 'plus') { r.data.quante = (+r.data.quante || 1) + 1; r.data.note = [r.data.note, `${r.data.quante}ª crisi alle ${nowTime()}`].filter(Boolean).join('. '); save(r); return toast(`${r.data.quante} crisi in questo episodio`); }
-  if (a === 'ziepam') { r.data.emergenza = [r.data.emergenza, `Ziepam alle ${nowTime()}`].filter(Boolean).join(', '); save(r); return toast('Segnato: Ziepam alle ' + nowTime()); }
-  if (a === 'video') { r.data.video = r.data.video ? undefined : 'Sì, nella galleria'; save(r); return toast(r.data.video ? 'Segnato: c\'è un video' : 'Video tolto'); }
-  if (a === 'cancel') { if (!confirm('Annullare questa crisi?')) return; r.deleted = true; save(r); keepAwake(false); return; }
-  if (a === 'stop') {
-    r.data.durSec = r.data.durSec || Math.max(1, Math.round((Date.now() - r.data.startTs) / 1000));
-    delete r.data.live; save(r); keepAwake(false);
-    openForm('crisi', r); toast(`Durata ${fmtDur(r.data.durSec)}: completa i dettagli`);
+  const d = r.data, s = liveState(d); d.timeline = s.tl;
+  if (a === 'next') {
+    if (s.phase === 'crisi') { (d.convs ||= []).push(Math.max(1, Math.round((now - s.phaseTs) / 1000))); d.timeline.push({ t: now, e: `Fine scosse (${fmtDur(d.convs.at(-1))})` }); d.phase = 'terra'; }
+    else if (s.phase === 'terra') { d.terraSec = (d.terraSec || 0) + Math.round((now - s.phaseTs) / 1000); d.timeline.push({ t: now, e: 'Si è rialzata' }); d.phase = 'vaga'; }
+    else { finishLive(r, now, 'Tornata normale'); save(r); keepAwake(false); openForm('crisi', r); return toast('Episodio salvato: controlla e completa'); }
+    d.phaseTs = now; navigator.vibrate?.(40); return save(r);
   }
+  if (a === 'again') {
+    if (s.phase !== 'crisi') d[s.phase + 'Sec'] = (d[s.phase + 'Sec'] || 0) + Math.round((now - s.phaseTs) / 1000);
+    d.quante = (+d.quante || 1) + 1; d.phase = 'crisi'; d.phaseTs = now; d.timeline.push({ t: now, e: `Crisi ${d.quante}` });
+    navigator.vibrate?.([80, 60, 80]); return save(r);
+  }
+  if (a.startsWith('ev:')) {
+    const k = a.slice(3);
+    if (k === 'video') { d.video = d.video ? undefined : 'Sì, nella galleria'; save(r); return toast(d.video ? 'Segnato: c\'è un video' : 'Video tolto'); }
+    d.timeline.push({ t: now, e: EVTXT[k] }); save(r); navigator.vibrate?.(20); return toast(`${EVTXT[k]} · ${nowTime()}`);
+  }
+  if (a === 'cancel') { if (!confirm('Annullare questo episodio?')) return; r.deleted = true; save(r); keepAwake(false); return; }
+  if (a === 'stop') { finishLive(r, now); save(r); keepAwake(false); openForm('crisi', r); toast('Episodio salvato: controlla e completa'); }
 }
 
 // ---------- pastiglie ----------
@@ -1314,6 +1354,7 @@ function greeting() {
 }
 function subtitleText() {
   const d = curDog(), t = today(), bits = [];
+  if (liveRec()) return '⚡ Episodio in corso: segui le fasi qui sotto';
   const sl = slotsFor(dog, t), taken = new Set(dosesOn(dog, t).map(r => r.data.slot)), left = sl.filter(s => !taken.has(slotKey(s)));
   const late = left.filter(s => s.t < nowTime());
   if (late.length) bits.push(`⚠️ ${d.name} ha ${plural(late.length, 'pastiglia', 'pastiglie')} da dare`);

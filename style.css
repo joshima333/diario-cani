@@ -491,3 +491,23 @@ h1.large{font-size:2rem}
 .tile:not(.prime) .give{position:static;margin-top:10px;background:var(--ok);color:#fff}
 .tile.warn .give{color:#e07b12}
 .tile .give:active{transform:scale(.94)}
+
+/* ===== episodio di crisi a fasi ===== */
+.live{border-color:color-mix(in srgb,var(--ph) 55%,transparent);background:linear-gradient(160deg,color-mix(in srgb,var(--ph) 24%,var(--glass)),var(--glass))}
+.live-h{color:var(--ph)}
+.pulse{background:var(--ph)}
+.steps3{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 2px}
+.steps3 span{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem;border:2px solid var(--line);color:var(--muted)}
+.steps3 span.on{background:var(--c);border-color:var(--c);color:#fff;transform:scale(1.15)}
+.steps3 span.done{border-color:var(--c);color:var(--c)}
+.steps3 i{width:22px;height:2px;background:var(--line)}
+.btn.phase-next{background:var(--ph);color:#fff;border:0;font-size:1.2rem;padding:18px;margin-top:6px;box-shadow:0 10px 26px color-mix(in srgb,var(--ph) 45%,transparent)}
+.ph-hint{margin:6px 0 0;font-size:.78rem;color:var(--muted)}
+.btn.again{background:none;border:2px solid #ff3b5c;color:#ff3b5c;font-weight:800;margin-top:10px}
+.live-row.q5{grid-template-columns:repeat(2,1fr)}
+.live-row.q5 button:last-child{grid-column:1/-1}
+.tlog{margin-top:12px;text-align:left;border-top:1px solid var(--line);padding-top:8px}
+.tlog div{display:flex;gap:10px;font-size:.85rem;padding:3px 0}
+.tlog b{width:62px;flex:none;font-variant-numeric:tabular-nums}.tlog b small{color:var(--muted);font-weight:500}
+.live-f{display:flex;justify-content:space-between;margin-top:10px}
+.live-f .link{color:var(--muted);font-size:.82rem}
