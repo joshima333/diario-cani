@@ -450,14 +450,14 @@ body.zoe{--dog:#ff8a5c;--dog2:#ffb340}
 /* ===== saluto, apertura, spunta animata, calendario a mese, grafici animati ===== */
 .subtitle{margin:-8px 4px 16px;color:var(--muted);font-weight:600;font-size:.95rem}
 h1.large{font-size:2rem}
-#splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-  background:radial-gradient(circle at 30% 20%,#9d8cff,transparent 60%),radial-gradient(circle at 80% 80%,#ff8a5c,transparent 55%),var(--bg);transition:opacity .5s,transform .5s}
+#splash{position:fixed;inset:0;z-index:100;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:radial-gradient(circle at 30% 20%,#9d8cff,transparent 60%),radial-gradient(circle at 80% 80%,#ff8a5c,transparent 55%),var(--bg);transition:opacity .25s,transform .25s}
 #splash.gone{opacity:0;transform:scale(1.06);pointer-events:none}
 #splash .sp-avs{display:flex;margin-bottom:8px}
-#splash .sp-avs .av{animation:spIn .7s cubic-bezier(.2,1.4,.4,1) both}
-#splash .sp-avs .av+.av{margin-left:-18px;animation-delay:.12s}
-#splash b{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;animation:spUp .6s .2s both}
-#splash small{color:var(--muted);font-weight:600;animation:spUp .6s .3s both}
+#splash .sp-avs .av{animation:spIn .35s cubic-bezier(.2,1.4,.4,1) both}
+#splash .sp-avs .av+.av{margin-left:-18px;animation-delay:.06s}
+#splash b{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;animation:spUp .3s .05s both}
+#splash small{color:var(--muted);font-weight:600;animation:spUp .3s .1s both}
 @keyframes spIn{from{transform:scale(.3) rotate(-15deg);opacity:0}}
 @keyframes spUp{from{transform:translateY(12px);opacity:0}}
 .pop .chk,.ag-dose.pop>span{animation:pop .55s cubic-bezier(.2,1.6,.4,1)}
@@ -482,3 +482,12 @@ h1.large{font-size:2rem}
 .cal-d.has-cr{background:color-mix(in srgb,#ff5f7e 18%,var(--glass2))}
 .cal-d.today b{color:var(--dog);font-weight:800}
 .cal-d.sel{background:var(--dog);color:#fff}.cal-d.sel b{color:#fff}
+
+/* angoli arrotondati anche con la foto sfocata (Safari) */
+.hero{clip-path:inset(0 round var(--r));isolation:isolate;border-radius:var(--r)}
+/* tasto "Data" nel riquadro della pastiglia */
+.tile .give{position:absolute;right:14px;bottom:14px;border:0;border-radius:999px;padding:10px 16px;font-weight:800;font-size:.95rem;
+  background:rgba(255,255,255,.95);color:var(--dog);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.tile:not(.prime) .give{position:static;margin-top:10px;background:var(--ok);color:#fff}
+.tile.warn .give{color:#e07b12}
+.tile .give:active{transform:scale(.94)}

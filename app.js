@@ -416,16 +416,18 @@ function nextDose(d) {
   for (const [day, add] of [[t, 0], [dayAdd(t, 1), 1440]]) {
     const taken = new Set(dosesOn(d, day).map(r => r.data.slot));
     const s = slotsFor(d, day).find(s => !taken.has(slotKey(s)) && (day > t || s.t >= now));
-    if (s) return { ...s, mins: mins(s.t) + add - mins(now), tomorrow: !!add };
+    if (s) return { ...s, day, mins: mins(s.t) + add - mins(now), tomorrow: !!add };
   }
   return null;
 }
 function homeTiles() {
   const d = curDog(), out = [], t = today();
   const late = (() => { const taken = new Set(dosesOn(dog, t).map(r => r.data.slot)); return slotsFor(dog, t).filter(s => !taken.has(slotKey(s)) && s.t < nowTime()); })();
-  if (late.length) out.push(tile('Da dare', `${late[0].t}`, esc(late[0].what), late.length > 1 ? `e altre ${late.length - 1}` : 'in ritardo', '', 'warn'));
+  const giveBtn = (s, day) => readonly ? '' : `<button class="give" data-pill="${esc(slotKey(s))}" data-day="${day}">✓ Data</button>`;
+  const withBtn = (html, s, day) => html.replace(/<\/div>$/, giveBtn(s, day) + '</div>');
+  if (late.length) out.push(withBtn(tile('Da dare', `${late[0].t}`, esc(late[0].what), late.length > 1 ? `e altre ${late.length - 1}` : 'in ritardo', '', 'warn'), late[0], t));
   const nd = nextDose(dog);
-  if (nd) out.push(tile('Prossima pastiglia', `${nd.tomorrow ? 'domani ' : ''}${nd.t}`, esc(nd.what), inTime(nd.mins)));
+  if (nd) out.push(withBtn(tile('Prossima pastiglia', `${nd.tomorrow ? 'domani ' : ''}${nd.t}`, esc(nd.what), inTime(nd.mins)), nd, nd.day));
   if (d.epi) {
     const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3), diff = m.total - (m2.total - m.total);
     out.push(tile('Crisi questo mese', m.total, '', diff > 0 ? `<i class="up">▲ ${diff} sul mese scorso</i>` : diff < 0 ? `<i class="down">▼ ${-diff} sul mese scorso</i>` : 'come il mese scorso'));
@@ -1368,8 +1370,8 @@ function makeAppIcon() {
 (function splash() {
   const el = $('#splash'); if (!el) return;
   el.querySelector('.sp-avs').innerHTML = DOGS.map(d => avatar(d.id, 76)).join('');
-  setTimeout(() => el.classList.add('gone'), 1100);
-  setTimeout(() => el.remove(), 1700);
+  setTimeout(() => el.classList.add('gone'), 450);
+  setTimeout(() => el.remove(), 750);
 })();
 
 view.addEventListener('click', e => {
