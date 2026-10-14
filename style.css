@@ -446,3 +446,39 @@ body.zoe{--dog:#ff8a5c;--dog2:#ffb340}
 .tabbar button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .tabbar button.on{color:var(--dog)}
 .tabbar button.on svg{transform:scale(1.06)}
+
+/* ===== saluto, apertura, spunta animata, calendario a mese, grafici animati ===== */
+.subtitle{margin:-8px 4px 16px;color:var(--muted);font-weight:600;font-size:.95rem}
+h1.large{font-size:2rem}
+#splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:radial-gradient(circle at 30% 20%,#9d8cff,transparent 60%),radial-gradient(circle at 80% 80%,#ff8a5c,transparent 55%),var(--bg);transition:opacity .5s,transform .5s}
+#splash.gone{opacity:0;transform:scale(1.06);pointer-events:none}
+#splash .sp-avs{display:flex;margin-bottom:8px}
+#splash .sp-avs .av{animation:spIn .7s cubic-bezier(.2,1.4,.4,1) both}
+#splash .sp-avs .av+.av{margin-left:-18px;animation-delay:.12s}
+#splash b{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;animation:spUp .6s .2s both}
+#splash small{color:var(--muted);font-weight:600;animation:spUp .6s .3s both}
+@keyframes spIn{from{transform:scale(.3) rotate(-15deg);opacity:0}}
+@keyframes spUp{from{transform:translateY(12px);opacity:0}}
+.pop .chk,.ag-dose.pop>span{animation:pop .55s cubic-bezier(.2,1.6,.4,1)}
+.pop .chk{box-shadow:0 0 0 0 rgba(34,194,122,.6);animation:pop .55s cubic-bezier(.2,1.6,.4,1),ring .8s ease-out}
+@keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes ring{from{box-shadow:0 0 0 0 rgba(34,194,122,.55)}to{box-shadow:0 0 0 16px rgba(34,194,122,0)}}
+.chart svg rect{transform-box:fill-box;transform-origin:50% 100%;animation:grow .7s cubic-bezier(.2,.9,.3,1) both}
+.bands rect{transform-origin:0 50%;animation:growX .8s cubic-bezier(.2,.9,.3,1) both}
+@keyframes grow{from{transform:scaleY(0)}}
+@keyframes growX{from{transform:scaleX(0)}}
+.chart svg rect.hit{filter:brightness(1.3);stroke:var(--text);stroke-width:1}
+.dmode{margin-bottom:12px}
+.cal{padding:14px}
+.cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-h b{text-transform:capitalize;font-size:1.05rem}.cal-h .link{font-size:1.5rem;padding:0 12px}
+.cal-w,.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal-w span{font-size:.7rem;font-weight:700;color:var(--muted);padding:4px 0}
+.cal-d{position:relative;aspect-ratio:1;border:0;border-radius:12px;background:var(--glass2);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0}
+.cal-d b{font-size:.9rem;font-weight:600}
+.cal-d i{display:flex;gap:2px;height:5px}.cal-d u{width:5px;height:5px;border-radius:50%;display:block}
+.cal-d em{position:absolute;top:2px;right:3px;font-style:normal;font-size:.6rem;font-weight:800;color:#fff;background:#ff5f7e;border-radius:999px;padding:0 4px;line-height:1.35}
+.cal-d.has-cr{background:color-mix(in srgb,#ff5f7e 18%,var(--glass2))}
+.cal-d.today b{color:var(--dog);font-weight:800}
+.cal-d.sel{background:var(--dog);color:#fff}.cal-d.sel b{color:#fff}

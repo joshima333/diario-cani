@@ -304,7 +304,7 @@ function barChart(items, { marks = [], color = '#8b7bff', h = 160 } = {}) {
   const every = n <= 8 ? 1 : Math.ceil(n / 7);
   items.forEach((it, i) => {
     const bh = (H - pb - pt) * it.v / max, w = Math.max(2, bw * .62), x = pl + bw * i + (bw - w) / 2;
-    if (it.v) s += `<rect x="${x}" y="${H - pb - bh}" width="${w}" height="${bh}" rx="${Math.min(4, w / 2)}" fill="url(#g${color.slice(1)})"><title>${esc(it.t || it.l)}: ${it.v}</title></rect>`;
+    if (it.v) s += `<rect x="${x}" y="${H - pb - bh}" width="${w}" height="${bh}" rx="${Math.min(4, w / 2)}" fill="url(#g${color.slice(1)})" style="animation-delay:${Math.min(i * 18, 500)}ms"><title>${esc(it.t || it.l)}: ${it.v}</title></rect>`;
     if (i % every === 0) s += `<text x="${pl + bw * i + bw / 2}" y="${H - 7}" text-anchor="middle">${esc(it.l)}</text>`;
   });
   return s + '</svg>';
@@ -462,8 +462,10 @@ const textOf = r => norm_([KINDS[r.kind].name, titleOf(r), ...Object.values(r.da
 function viewDiario() {
   const kinds = kindsFor(curDog());
   let h = `<div class="search glass"><span>🔍</span><input id="q" type="search" placeholder="Cerca (es. Ziepam, vomito, bava…)" value="${esc(query)}" autocomplete="off">${query ? '<button class="link" data-clearq>✕</button>' : ''}</div><div class="filters"><button class="pill ${!filter ? 'on' : ''}" data-filter="">Tutto</button>${kinds.map(([id, k]) => `<button class="pill ${filter === id ? 'on' : ''}" data-filter="${id}">${k.ic} ${k.name}</button>`).join('')}</div>`;
+  h = `<div class="seg3 dmode"><button class="${diaryMode === 'list' ? 'on' : ''}" data-dmode="list">☰ Elenco</button><button class="${diaryMode === 'month' ? 'on' : ''}" data-dmode="month">🗓️ Mese</button></div>` + h;
   const words = norm_(query).split(/\s+/).filter(Boolean);
   const rs = list(dog, filter || undefined).filter(r => !words.length || words.every(w => textOf(r).includes(w)));
+  if (diaryMode === 'month') return h + monthHTML(list(dog, filter || undefined).filter(r => !words.length || words.every(w => textOf(r).includes(w))));
   if (words.length) h += `<p class="period">${plural(rs.length, 'risultato', 'risultati')}</p>`;
   if (!rs.length) return h + listHTML([], words.length ? 'Nessun risultato' : undefined);
   const groups = {};
@@ -631,8 +633,10 @@ function render() {
   closeSwipe(true);
   $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${avatar(d.id, 26)}<span>${d.name}</span></button>`).join('');
   document.body.classList.toggle('zoe', dog === 'zoe');
-  $('#title').textContent = TITLES[tab]();
+  $('#title').textContent = tab === 'home' && !readonly ? greeting() : TITLES[tab]();
+  $('#subtitle').textContent = tab === 'home' && !readonly ? subtitleText() : '';
   const live = liveRec();
+  setTimeout(popTicked, 0); setTimeout(makeAppIcon, 0);
   $('#view').innerHTML = (live ? liveHTML(live) : '') + { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
   $('#gear').hidden = readonly; $('#fab').hidden = readonly;
   loadDocThumbs($('#view'));
@@ -912,7 +916,8 @@ function skipPill(key, day = today()) {
 function togglePill(key, day = today()) {
   const r = dosesOn(dog, day).find(x => x.data.slot === key);
   if (r) { r.deleted = true; save(r); return toast('Tolta la spunta', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } }); }
-  save({ id: uuid(), dog, kind: 'dose', data: { date: day, time: day === today() ? nowTime() : key.slice(0, 5), slot: key } }); navigator.vibrate?.(30);
+  justTicked = { key, day };
+  save({ id: uuid(), dog, kind: 'dose', data: { date: day, time: day === today() ? nowTime() : key.slice(0, 5), slot: key } }); navigator.vibrate?.([20, 40, 30]);
 }
 function adherence(d, days = 30) {
   const t = today(); let expected = 0, got = 0, first = null;
@@ -1298,6 +1303,80 @@ view.addEventListener('click', e => {
   const fc = e.target.closest('[data-factor]'); if (fc) { e.stopImmediatePropagation(); e.preventDefault(); return toggleFactor(fc.dataset.factor); }
   const sy = e.target.closest('[data-spyear]'); if (sy) { e.stopImmediatePropagation(); spYear = sy.dataset.spyear; return render(); }
   const sc = e.target.closest('[data-spcsv]'); if (sc) { e.stopImmediatePropagation(); return exportExpenses(sc.dataset.spcsv); }
+}, true);
+
+// ---------- saluto in alto ----------
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? '🌙 Buonanotte' : h < 13 ? '☀️ Buongiorno' : h < 18 ? '🌤️ Buon pomeriggio' : '🌙 Buonasera';
+}
+function subtitleText() {
+  const d = curDog(), t = today(), bits = [];
+  const sl = slotsFor(dog, t), taken = new Set(dosesOn(dog, t).map(r => r.data.slot)), left = sl.filter(s => !taken.has(slotKey(s)));
+  const late = left.filter(s => s.t < nowTime());
+  if (late.length) bits.push(`⚠️ ${d.name} ha ${plural(late.length, 'pastiglia', 'pastiglie')} da dare`);
+  else if (left.length) bits.push(`${d.name}: prossima pastiglia alle ${left[0].t}`);
+  else if (sl.length) bits.push(`${d.name}: pastiglie di oggi tutte date ✓`);
+  if (d.epi) { const st = seizureStats(dog, 1); if (st.last) bits.push(`${plural(Math.max(0, daysBetween(toDate(st.last.data.date), new Date())), 'giorno', 'giorni')} senza crisi`); }
+  if (!bits.length) bits.push(`Tutto tranquillo per ${d.name} 🐾`);
+  return bits.join(' · ');
+}
+
+// ---------- spunta animata ----------
+let justTicked = null;
+function popTicked() {
+  if (!justTicked) return;
+  document.querySelectorAll(`[data-pill="${CSS.escape(justTicked.key)}"][data-day="${justTicked.day}"]`).forEach(el => el.classList.add('pop'));
+  justTicked = null;
+}
+
+// ---------- calendario a mese nel Diario ----------
+let diaryMode = LS.get('cani.diaryMode', 'list'), calMonth = today().slice(0, 7), calDay = today();
+function monthHTML(rs) {
+  const [y, m] = calMonth.split('-').map(Number), first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate();
+  const lead = (first.getDay() + 6) % 7, byDay = {};
+  rs.forEach(r => (byDay[r.data.date] ||= []).push(r));
+  let cells = '';
+  for (let i = 0; i < lead; i++) cells += '<span></span>';
+  for (let n = 1; n <= days; n++) {
+    const day = `${calMonth}-${pad(n)}`, es = byDay[day] || [], kinds = [...new Set(es.map(r => r.kind))].slice(0, 4);
+    const cr = es.filter(r => r.kind === 'crisi').reduce((a, r) => a + (+r.data.quante || 1), 0);
+    cells += `<button class="cal-d${day === today() ? ' today' : ''}${day === calDay ? ' sel' : ''}${cr ? ' has-cr' : ''}" data-calday="${day}"><b>${n}</b>${cr ? `<em>${cr}</em>` : ''}<i>${kinds.map(k => `<u style="background:${COLORS[k]}"></u>`).join('')}</i></button>`;
+  }
+  const sel = (byDay[calDay] || []);
+  const leg = [...new Set(rs.filter(r => r.data.date.startsWith(calMonth)).map(r => r.kind))].map(k => `<span><i style="background:${COLORS[k]}"></i>${KINDS[k].name}</span>`).join('');
+  return `<div class="glass card cal">
+    <div class="cal-h"><button class="link" data-calnav="-1">‹</button><b>${new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</b><button class="link" data-calnav="1">›</button></div>
+    <div class="cal-w">${['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(w => `<span>${w}</span>`).join('')}</div>
+    <div class="cal-g">${cells}</div>${leg ? `<div class="legend">${leg}</div>` : ''}</div>
+    <h3 class="sub">${esc(fmtDate(calDay))}</h3>${listHTML(sel, 'Niente in questo giorno')}`;
+}
+
+// ---------- icona dell'app con le foto dei cani ----------
+function makeAppIcon() {
+  const ps = DOGS.map(d => profile(d.id).foto).filter(Boolean); if (!ps.length) return;
+  const c = document.createElement('canvas'); c.width = c.height = 180; const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 180, 180); grad.addColorStop(0, '#8b7bff'); grad.addColorStop(1, '#ff8a5c'); g.fillStyle = grad; g.fillRect(0, 0, 180, 180);
+  let done = 0; const pos = ps.length > 1 ? [[52, 78, 46], [128, 102, 46]] : [[90, 90, 64]];
+  ps.slice(0, 2).forEach((src, i) => { const im = new Image(); im.onload = () => {
+    const [x, y, r] = pos[i]; g.save(); g.beginPath(); g.arc(x, y, r + 4, 0, 7); g.fillStyle = '#fff'; g.fill(); g.beginPath(); g.arc(x, y, r, 0, 7); g.clip(); g.drawImage(im, x - r, y - r, r * 2, r * 2); g.restore();
+    if (++done === Math.min(2, ps.length)) { const l = document.querySelector('link[rel="apple-touch-icon"]'); if (l) l.href = c.toDataURL('image/png'); }
+  }; im.src = src; });
+}
+
+// ---------- schermata d'apertura ----------
+(function splash() {
+  const el = $('#splash'); if (!el) return;
+  el.querySelector('.sp-avs').innerHTML = DOGS.map(d => avatar(d.id, 76)).join('');
+  setTimeout(() => el.classList.add('gone'), 1100);
+  setTimeout(() => el.remove(), 1700);
+})();
+
+view.addEventListener('click', e => {
+  const cd = e.target.closest('[data-calday]'); if (cd) { e.stopImmediatePropagation(); calDay = cd.dataset.calday; return render(); }
+  const cn = e.target.closest('[data-calnav]'); if (cn) { e.stopImmediatePropagation(); const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + +cn.dataset.calnav, 1); calMonth = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; return render(); }
+  const dm = e.target.closest('[data-dmode]'); if (dm) { e.stopImmediatePropagation(); diaryMode = dm.dataset.dmode; LS.set('cani.diaryMode', diaryMode); return render(); }
+  const bar = e.target.closest('svg rect'); if (bar && bar.querySelector('title')) { e.stopImmediatePropagation(); bar.classList.remove('hit'); void bar.getBBox(); bar.classList.add('hit'); return toast(bar.querySelector('title').textContent); }
 }, true);
 
 // ---------- accesso ----------
