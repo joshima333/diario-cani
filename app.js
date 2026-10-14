@@ -369,9 +369,10 @@ function itemHTML(r, { swipe = !readonly } = {}) {
 const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass list">${arr.length ? arr.map(r => itemHTML(r, opt)).join('') : `<div class="empty">${empty}</div>`}</div>`;
 // sezioni richiudibili: si apre/chiude toccando il titolo, la scelta resta salvata
 const folds = new Set(LS.get('cani.fold', []));
+const SEC_IC = [[/pastiglie/i, '💊'], [/calendario/i, '🗓️'], [/giornata/i, '📝'], [/ricorrenti/i, '🔁'], [/terapia in corso/i, '🩺'], [/storia della terapia/i, '📜'], [/scorte/i, '📦'], [/arrivo/i, '🔔'], [/ultime voci/i, '🕘'], [/^crisi$/i, '⚡'], [/analisi/i, '🩸'], [/visit/i, '🩺'], [/vaccin/i, '💉'], [/problem/i, '🤒'], [/spes/i, '💶']];
 const section = (title, body, extra = '') => {
-  const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key);
-  return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}" role="button" onclick="if(!event.target.closest('button'))toggleFold(this)"><h3><i class="chev">›</i>${title}</h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
+  const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key), ic = (SEC_IC.find(([re]) => re.test(key)) || [, '📅'])[1];
+  return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}" role="button" onclick="if(!event.target.closest('button'))toggleFold(this)"><h3><span class="sec-ic">${/^[A-Za-zÀ-ÿ]/.test(key) && /^\d{4}$/.test(key.slice(-4)) ? '📅' : ic}</span>${title}<i class="chev">›</i></h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
 };
 function toggleFold(el) {
   const key = el.dataset.fold, body = el.nextElementSibling, shut = !folds.has(key);
@@ -400,14 +401,15 @@ function heroCard() {
     const n = st.last ? Math.max(0, daysBetween(toDate(st.last.data.date), new Date())) : null;
     right = `<div class="streak"><b>${n ?? '—'}</b><small>${n === 1 ? 'giorno' : 'giorni'} senza crisi</small></div>`;
   }
-  return `<div class="glass hero" data-profile>
+  return `<div class="glass hero" data-profile${p.foto ? ` style="--photo:url('${esc(p.foto)}')"` : ''}>
     ${avatar(dog, 72)}
     <div class="hero-tx"><h2>${esc(d.name)}</h2><p>${esc(ageOf(dog))}</p><small>${esc(bits) || 'Tocca per completare il profilo ›'}</small></div>${right}</div>`;
 }
 
 // ---------- viste ----------
 // riquadri "a colpo d'occhio": solo ciò che conta adesso, in ordine di importanza
-const tile = (label, big, sub = '', em = '', attrs = '', cls = '') => `<div class="glass tile${attrs ? ' tap' : ''} ${cls}" ${attrs}><small>${label}</small><b class="${String(big).length > 6 ? 'sm' : ''}">${big}</b>${sub ? `<span>${sub}</span>` : ''}${em ? `<em>${em}</em>` : ''}</div>`;
+const TILE_IC = [[/da dare/i, '⏰'], [/pastiglia/i, '💊'], [/crisi questo/i, '⚡'], [/ultima crisi/i, '📅'], [/media/i, '📈'], [/cura/i, '🩹'], [/finendo/i, '📦'], [/scadenza|scaduto/i, '🔔'], [/visita/i, '🩺']];
+const tile = (label, big, sub = '', em = '', attrs = '', cls = '') => `<div class="glass tile${attrs ? ' tap' : ''} ${cls}" ${attrs}><i class="t-ic">${(TILE_IC.find(([re]) => re.test(label)) || [, ''])[1]}</i><small>${label}</small><b class="${String(big).length > 6 ? 'sm' : ''}">${big}</b>${sub ? `<span>${sub}</span>` : ''}${em ? `<em>${em}</em>` : ''}</div>`;
 const inTime = mins => mins < 60 ? `tra ${mins} min` : `tra ${Math.floor(mins / 60)} h${mins % 60 ? ' ' + (mins % 60) + ' min' : ''}`;
 function nextDose(d) {
   const t = today(), now = nowTime(), mins = hm => +hm.slice(0, 2) * 60 + +hm.slice(3);
@@ -436,6 +438,7 @@ function homeTiles() {
   const up = upcoming(dog)[0];
   if (up) out.push(tile(up.due < t ? 'Scaduto' : 'Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), whenTxt(up.due), `data-id="${up.r.id}"`, up.due <= t ? 'warn' : ''));
   if (!d.epi) { const v = list(dog, 'visita').filter(r => r.data.date <= t)[0]; if (v) out.push(tile('Ultima visita', esc(fmtDate(v.data.date).replace(/ \d{4}$/, '')), since(v.data.date), esc(v.data.motivo || ''), `data-id="${v.id}"`)); }
+  if (out.length) out[0] = out[0].replace('class="glass tile', 'class="glass tile prime');
   return out.length ? `<div class="tiles">${out.slice(0, 6).join('')}</div>` : '';
 }
 function viewHome() {
@@ -865,7 +868,7 @@ function slotsFor(d, day) {
   return res.sort((a, b) => a.t.localeCompare(b.t));
 }
 const slotKey = s => `${s.t} ${s.what}`;
-const PHASE = ['#ff6b8a', '#ffb340', '#3ea6ff', '#2fc28b', '#a78bfa', '#ff8a5c', '#22c3c3', '#f472b6', '#c3e14b'];
+const PHASE = ['#3b82f6', '#f59e0b', '#22c55e', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
 function courses(d) {
   return list(d, 'terapia').filter(r => r.data.fine && timesIn(r.data.orari).length)
     .sort((a, b) => (a.data.farmaco || '').localeCompare(b.data.farmaco || '') || a.data.date.localeCompare(b.data.date));
@@ -900,7 +903,7 @@ function agendaCard() {
     return `<div class="ag-day${day === t ? ' today' : ''}${day < t ? ' past' : ''}"><div class="ag-d"><b>${dt.getDate()}</b><small>${dt.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}</small></div>
       <div class="ag-l">${sl.map(s => { const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, ok = r && !sk, miss = !r && (day < t || (day === t && s.t < nowTime()));
         return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}${s.c ? ' col' : ''}${s.mod ? ' mod' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-orig="${esc(s.orig || slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
-  }).join('')}</div><div class="legend phase">${leg}</div><p class="hint small">Tieni premuta una dose per cambiarne orario o quantità solo per quel giorno</p>`, `<span class="count">fino al ${esc(fmtDate(rg.to))}</span>`);
+  }).join('')}</div><div class="legend phase">${leg}</div><p class="hint small">Tieni premuta una dose per cambiarne orario o quantità solo per quel giorno</p>`, `<span class="count">fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ""))}</span>`);
 }
 function skipPill(key, day = today()) {
   const r = { id: uuid(), dog, kind: 'dose', data: { date: day, time: nowTime(), slot: key, skip: true } };
