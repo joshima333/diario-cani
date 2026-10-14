@@ -231,7 +231,7 @@ const list = (dog, kind) => Object.values(records)
 let dog = LS.get('cani.dog', 'kafka'), tab = 'home', filter = '', range = 6;
 const curDog = () => DOGS.find(d => d.id === dog);
 const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
-const COLORS = { crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa' };
+const COLORS = { crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa', spesa: '#f5b400', scorta: '#22c3c3', ricorrenza: '#2fc28b', giorno: '#a78bfa', dose: '#22c27a', dosemod: '#8b7bff', programma: '#8b7bff' };
 const profileId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000000a' : '00000000000b');
 const profile = d => records[profileId(d)]?.data || {};
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -360,8 +360,9 @@ function itemHTML(r, { swipe = !readonly } = {}) {
   const extra = (d.docs?.length ? ' <span class="clip">📎</span>' : '') + (d.video?.startsWith('Sì') ? ' <span class="clip">📹</span>' : '');
   const title = (r.kind === 'crisi' ? `Crisi${q > 1 ? ` <span class="badge">×${q}</span>` : ''}` : esc(titleOf(r))) + extra;
   const sub = r.kind === 'crisi' ? [fmtDur(d.durSec), d.tipo && d.tipo.replace(' (tonico-clonica)', '')].filter(Boolean).join(' · ') : k.sum(d);
+  const cost = +d.costo > 0 && r.kind !== 'spesa' ? ` · ${euro(d.costo)}` : '';
   const row = `<div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${k.ic}</div>
-    <div class="tx"><b>${title}</b><small>${esc(sub) || (r.kind === 'crisi' && d.note ? esc(d.note) : '&nbsp;')}</small>${r.kind === 'crisi' ? dots(d.intensita) : ''}</div>
+    <div class="tx"><b>${title}</b><small>${esc(sub) + cost || (r.kind === 'crisi' && d.note ? esc(d.note) : '&nbsp;')}</small>${r.kind === 'crisi' ? dots(d.intensita) : ''}</div>
     <div class="dt">${esc(fmtDate(d.date))}${d.time ? `<br><span>${esc(d.time)}</span>` : ''}</div></div>`;
   return `<div class="item${swipe ? ' swipe' : ''}" data-id="${r.id}">${swipe ? '<div class="sdel">🗑 Elimina</div>' : ''}${row}</div>`;
 }
@@ -1276,6 +1277,8 @@ function expensesCard() {
     <div class="kv"><span>Tutti e due i cani</span><b>${euro(tot(all))}</b></div>
     ${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="hb"><div><span>${esc(k)}</span><b>${euro(v)}</b></div><i><i style="width:${v / max * 100}%;background:${COLORS.analisi}"></i></i></div>`).join('')}
     ${barChart(months.map((m, i) => ({ l: new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'narrow' }), t: euro(mv[m]), v: Math.round(mv[m]) })), { color: COLORS.analisi, h: 120 })}
+    <h3 class="sub">Elenco ${y} · ${esc(curDog().name)}</h3>${listHTML(inY(mine).sort((a, b) => b.data.date.localeCompare(a.data.date)), 'Nessuna spesa')}
+    <p class="hint small">Tocca una spesa per modificarla, scorri a sinistra per eliminarla</p>
     <button class="btn" data-spcsv="${y}">📊 Esporta le spese del ${y}</button>
     <p class="muted small">Le spese veterinarie si possono detrarre in parte nella dichiarazione dei redditi: conserva le fatture e verifica con il CAF o il commercialista.</p></div>`;
 }

@@ -403,3 +403,4 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .seg3{display:flex;gap:4px;padding:4px;border-radius:14px;background:var(--glass2)}
 .seg3 button{flex:1;border:0;background:none;color:var(--muted);font-weight:600;padding:9px 4px;border-radius:10px}
 .seg3 button.on{background:var(--accent);color:#fff}
+.sub{font-size:.95rem;margin:16px 0 8px}
