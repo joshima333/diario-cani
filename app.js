@@ -292,7 +292,17 @@ function itemHTML(r, { swipe = !readonly } = {}) {
   return `<div class="item${swipe ? ' swipe' : ''}" data-id="${r.id}">${swipe ? '<div class="sdel">🗑 Elimina</div>' : ''}${row}</div>`;
 }
 const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass list">${arr.length ? arr.map(r => itemHTML(r, opt)).join('') : `<div class="empty">${empty}</div>`}</div>`;
-const section = (title, body, extra = '') => `<div class="sec"><h3>${title}</h3>${extra}</div>${body}`;
+// sezioni richiudibili: si apre/chiude toccando il titolo, la scelta resta salvata
+const folds = new Set(LS.get('cani.fold', []));
+const section = (title, body, extra = '') => {
+  const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key);
+  return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}"><h3><i class="chev">›</i>${title}</h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
+};
+function toggleFold(el) {
+  const key = el.dataset.fold, body = el.nextElementSibling, shut = !folds.has(key);
+  shut ? folds.add(key) : folds.delete(key); LS.set('cani.fold', [...folds]);
+  el.classList.toggle('shut', shut); body.classList.toggle('folded', shut);
+}
 
 function therapyCards(d) {
   const th = currentTherapy(d);
@@ -649,6 +659,7 @@ $('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-
 $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); scrollTo(0, 0); });
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
+  const fd = e.target.closest('[data-fold]'); if (fd && !e.target.closest('button')) return toggleFold(fd);
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
   const pl = e.target.closest('[data-pill]'); if (pl) return e.target.closest('[data-skip]') ? skipPill(pl.dataset.pill, pl.dataset.day) : togglePill(pl.dataset.pill, pl.dataset.day);
   if (e.target.closest('[data-prog]')) return openForm('programma', records[progId(dog)] || { id: progId(dog), dog, kind: 'programma', data: {} });
@@ -734,12 +745,19 @@ function slotsFor(d, day) {
     for (const t of timesIn(x.orari)) {
       if (day === x.date && x.primaOra && t < x.primaOra) continue;
       if (day === x.fine && x.ultimaOra && t > x.ultimaOra) continue;
-      out.push({ t, what: doseLabel(x), ther: r.id });
+      out.push({ t, what: doseLabel(x), ther: r.id, c: courseColor(d, r.id) });
     }
   }
   return out.sort((a, b) => a.t.localeCompare(b.t));
 }
 const slotKey = s => `${s.t} ${s.what}`;
+const PHASE = ['#ff6b8a', '#ffb340', '#3ea6ff', '#2fc28b', '#a78bfa', '#ff8a5c', '#22c3c3', '#f472b6', '#c3e14b'];
+function courses(d) {
+  return list(d, 'terapia').filter(r => r.data.fine && timesIn(r.data.orari).length)
+    .sort((a, b) => (a.data.farmaco || '').localeCompare(b.data.farmaco || '') || a.data.date.localeCompare(b.data.date));
+}
+const courseColor = (d, id) => { const i = courses(d).findIndex(r => r.id === id); return i < 0 ? '' : PHASE[i % PHASE.length]; };
+const dc = s => s.c ? ` style="--dc:${s.c}"` : '';
 const dosesOn = (d, date) => list(d, 'dose').filter(r => r.data.date === date);
 function pillsCard() {
   const t = today(), sl = slotsFor(dog, t);
@@ -748,7 +766,7 @@ function pillsCard() {
   const done = sl.filter(s => taken.some(r => r.data.slot === slotKey(s))).length;
   return section('Pastiglie di oggi', `<div class="glass list pills">${sl.map(s => {
     const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, late = !r && s.t < now;
-    return `<div class="pill-row${sk ? ' skip' : r ? ' ok' : late ? ' late' : ''}" data-pill="${esc(slotKey(s))}" data-day="${t}"><span class="chk">${sk ? '–' : r ? '✓' : ''}</span>
+    return `<div class="pill-row${sk ? ' skip' : r ? ' ok' : late ? ' late' : ''}${s.c ? ' col' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-day="${t}"><span class="chk">${sk ? '–' : r ? '✓' : ''}</span>
       <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${sk ? 'non data' : r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`;
   }).join('')}</div><div class="pills-f"><button class="link" data-prog>Orari fissi</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`) + agendaCard();
 }
@@ -762,12 +780,13 @@ function agendaCard() {
   const rg = courseRange(dog); if (!rg) return '';
   const t = today(), days = [];
   for (let d = rg.from < dayAdd(t, -3) ? dayAdd(t, -3) : rg.from; d <= rg.to && days.length < 31; d = dayAdd(d, 1)) days.push(d);
+  const leg = courses(dog).filter(r => r.data.fine >= rg.from && r.data.date <= rg.to).map(r => `<span><i style="background:${courseColor(dog, r.id)}"></i>${esc(doseLabel(r.data))} · ${esc(fmtDate(r.data.date).replace(/ \d{4}$/, ''))}–${esc(fmtDate(r.data.fine).replace(/ \d{4}$/, ''))}</span>`).join('');
   return section('Calendario terapie', `<div class="glass agenda">${days.map(day => {
     const sl = slotsFor(dog, day), taken = dosesOn(dog, day), dt = toDate(day);
     return `<div class="ag-day${day === t ? ' today' : ''}${day < t ? ' past' : ''}"><div class="ag-d"><b>${dt.getDate()}</b><small>${dt.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}</small></div>
       <div class="ag-l">${sl.map(s => { const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, ok = r && !sk, miss = !r && (day < t || (day === t && s.t < nowTime()));
-        return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}" data-pill="${esc(slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
-  }).join('')}</div>`, `<span class="count">fino al ${esc(fmtDate(rg.to))}</span>`);
+        return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}${s.c ? ' col' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
+  }).join('')}</div><div class="legend phase">${leg}</div>`, `<span class="count">fino al ${esc(fmtDate(rg.to))}</span>`);
 }
 function skipPill(key, day = today()) {
   const r = { id: uuid(), dog, kind: 'dose', data: { date: day, time: nowTime(), slot: key, skip: true } };

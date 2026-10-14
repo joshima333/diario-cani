@@ -347,3 +347,19 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .pill-row.skip .pw{color:var(--muted);text-decoration:line-through}.pill-row.skip .chk{border-style:dashed}
 .ag-dose{cursor:pointer}.ag-dose em{flex:1;font-style:normal}
 .ag-dose.skip{color:var(--muted);text-decoration:line-through}.ag-dose.skip span{border-style:dashed}
+
+/* sezioni richiudibili */
+.sec[data-fold]{cursor:pointer;-webkit-user-select:none;user-select:none}
+.sec h3{display:flex;align-items:center;gap:6px}
+.chev{font-style:normal;display:inline-block;color:var(--muted);font-size:1.1rem;transform:rotate(90deg);transition:transform .25s}
+.sec.shut .chev{transform:rotate(0)}
+.fold-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s ease,opacity .3s}
+.fold-body>*{min-height:0;overflow:hidden}
+.fold-body.folded{grid-template-rows:0fr;opacity:0}
+.fold-body:not(.folded)>*{overflow:visible}
+
+/* colori delle fasi di una cura */
+.pill-row.col{box-shadow:inset 4px 0 0 var(--dc)}
+.ag-dose.col{border-color:color-mix(in srgb,var(--dc) 55%,transparent);background:color-mix(in srgb,var(--dc) 16%,var(--glass2))}
+.ag-dose.col em{font-weight:600}
+.legend.phase{padding:10px 4px 2px;border-top:1px solid var(--line);margin-top:4px;gap:8px 14px}
