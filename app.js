@@ -296,7 +296,7 @@ const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass l
 const folds = new Set(LS.get('cani.fold', []));
 const section = (title, body, extra = '') => {
   const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key);
-  return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}"><h3><i class="chev">›</i>${title}</h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
+  return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}" role="button" onclick="if(!event.target.closest('button'))toggleFold(this)"><h3><i class="chev">›</i>${title}</h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
 };
 function toggleFold(el) {
   const key = el.dataset.fold, body = el.nextElementSibling, shut = !folds.has(key);
@@ -659,7 +659,7 @@ $('#dogSeg').addEventListener('click', e => { const b = e.target.closest('[data-
 $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; render(); scrollTo(0, 0); });
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
-  const fd = e.target.closest('[data-fold]'); if (fd && !e.target.closest('button')) return toggleFold(fd);
+  if (e.target.closest('[data-fold]') && !e.target.closest('button')) return;
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
   const pl = e.target.closest('[data-pill]'); if (pl) return e.target.closest('[data-skip]') ? skipPill(pl.dataset.pill, pl.dataset.day) : togglePill(pl.dataset.pill, pl.dataset.day);
   if (e.target.closest('[data-prog]')) return openForm('programma', records[progId(dog)] || { id: progId(dog), dog, kind: 'programma', data: {} });
