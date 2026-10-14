@@ -40,6 +40,7 @@ const KINDS = {
       { k: 'ultimaOra', l: 'Ultimo giorno: ultima dose alle', t: 'time' },
       { k: 'sospeso', l: 'Stato', t: 'select', o: ['In corso', 'Sospeso'] },
       { k: 'motivo', l: 'Motivo del cambio', t: 'text' },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'note', l: 'Note', t: 'area' },
     ],
     title: d => d.farmaco || 'Terapia',
@@ -54,6 +55,7 @@ const KINDS = {
       { k: 'esito', l: 'Esito', t: 'select', o: ['Nella norma', 'Da controllare', 'Alterato'] },
       { k: 'risultati', l: 'Risultati / valori fuori norma', t: 'area' },
       { k: 'prossime', l: 'Prossime analisi', t: 'date' },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'docs', l: 'Foto del referto', t: 'docs' },
     ],
     title: d => d.tipo || 'Analisi',
@@ -65,6 +67,7 @@ const KINDS = {
       { k: 'date', l: 'Giorno', t: 'date' },
       { k: 'nome', l: 'Cosa', t: 'text', ph: 'es. Polivalente, Rabbia, Leishmania', list: 'vaccini' },
       { k: 'richiamo', l: 'Prossimo richiamo', t: 'date' },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'note', l: 'Note', t: 'area' },
     ],
     title: d => d.nome || 'Vaccino',
@@ -106,6 +109,35 @@ const KINDS = {
     fields: [{ k: 'slots', l: 'Una riga per pastiglia: ora e cosa', t: 'area', ph: '08:00 Phenoleptil 3/4\n20:00 Libromide 1/2\n23:00 Phenoleptil 3/4' }],
     sum: () => '',
   },
+  spesa: {
+    ic: '💶', name: 'Spesa',
+    fields: [
+      { k: 'date', l: 'Giorno', t: 'date' },
+      { k: 'cosa', l: 'Cosa', t: 'text', ph: 'es. Visita di controllo, Phenoleptil' },
+      { k: 'categoria', l: 'Categoria', t: 'select', o: ['Visita', 'Farmaci', 'Analisi', 'Vaccini', 'Antiparassitari', 'Chirurgia', 'Cibo', 'Toelettatura', 'Altro'] },
+      { k: 'costo', l: 'Importo (€)', t: 'num', step: '0.01' },
+      { k: 'dove', l: 'Dove', t: 'text', list: 'dove' },
+      { k: 'docs', l: 'Foto dello scontrino / fattura', t: 'docs' },
+      { k: 'note', l: 'Note', t: 'area' },
+    ],
+    title: d => d.cosa || d.categoria || 'Spesa',
+    sum: d => [d.costo != null && euro(d.costo), d.categoria].filter(Boolean).join(' · '),
+  },
+  ricorrenza: {
+    ic: '🔁', name: 'Promemoria ricorrente', nodate: true,
+    fields: [
+      { k: 'nome', l: 'Cosa', t: 'text', ph: 'es. NexGard Spectra', list: 'ricorrenze' },
+      { k: 'tipo', l: 'Tipo', t: 'select', o: ['Antiparassitario', 'Vaccino', 'Analisi', 'Visita', 'Altro'], def: 'Antiparassitario' },
+      { k: 'ogni', l: 'Ogni quanto', t: 'num', def: 1 },
+      { k: 'unita', l: 'Unità', t: 'select', o: ['giorni', 'settimane', 'mesi', 'anni'], def: 'mesi' },
+      { k: 'ultima', l: 'Ultima volta (se la sai)', t: 'date' },
+      { k: 'dose', l: 'Dose / note per la somministrazione', t: 'text', ph: 'es. 1 compressa da 15-30 kg' },
+      { k: 'note', l: 'Note', t: 'area' },
+    ],
+    title: d => d.nome || 'Promemoria',
+    sum: d => `ogni ${plural(+d.ogni || 1, ({ giorni: 'giorno', settimane: 'settimana', mesi: 'mese', anni: 'anno' })[d.unita || 'mesi'], d.unita || 'mesi')}`,
+  },
+  giorno: { ic: '📝', name: 'Diario del giorno', hidden: true, fields: [], sum: d => (d.fattori || []).join(', ') },
   dose: { ic: '✅', name: 'Pastiglia data', hidden: true, fields: [], sum: d => d.slot || '' },
   dosemod: { ic: '✎', name: 'Dose modificata', hidden: true, fields: [], sum: d => d.slot || '' },
   scorta: {
@@ -115,6 +147,7 @@ const KINDS = {
       { k: 'farmaco', l: 'Farmaco', t: 'text', list: 'farmaci' },
       { k: 'quante', l: 'Compresse nella confezione', t: 'num' },
       { k: 'avviso', l: 'Avvisami quando ne restano per (giorni)', t: 'num', def: 7 },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'note', l: 'Note', t: 'area' },
     ],
     title: d => d.farmaco || 'Confezione',
@@ -128,6 +161,7 @@ const KINDS = {
       { k: 'peso', l: 'Peso (kg)', t: 'num', step: '0.1' },
       { k: 'esito', l: 'Cosa ha detto il veterinario', t: 'area' },
       { k: 'prossima', l: 'Prossima visita', t: 'date' },
+      { k: 'costo', l: 'Costo (€)', t: 'num', step: '0.01' },
       { k: 'docs', l: 'Foto (ricette, libretto…)', t: 'docs' },
     ],
     title: d => d.motivo || 'Visita',
@@ -224,7 +258,8 @@ function currentTherapy(d) {
 }
 function upcoming(d) {
   const t = today(), out = [], seen = {};
-  for (const r of list(d)) { const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
+  for (const r of list(d)) { if (r.kind === 'ricorrenza') continue; const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
+  for (const r of list(d, 'ricorrenza')) { const due = nextDue(d, r); if (due) out.push({ r, due }); }
   return out.sort((a, b) => a.due.localeCompare(b.due)).filter(x => { const k = x.r.kind + titleOf(x.r); return seen[k] ? false : (seen[k] = 1); });
 }
 
@@ -398,7 +433,7 @@ function homeTiles() {
   if (rg && rg.to >= t) { const tot = daysBetween(toDate(rg.from), toDate(rg.to)) + 1, n = Math.min(tot, daysBetween(toDate(rg.from), toDate(t)) + 1); out.push(tile('Cura in corso', `giorno ${n}/${tot}`, `fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ''))}`, `<i class="bar"><i style="width:${n / tot * 100}%"></i></i>`)); }
   for (const b of stockStatus(dog).filter(b => b.daysLeft != null && b.daysLeft <= b.warn)) out.push(tile('Sta finendo', esc(b.farmaco), b.daysLeft <= 0 ? 'finita' : `per ${plural(b.daysLeft, 'giorno', 'giorni')}`, `circa ${fmtNum(Math.max(0, b.left))} compresse`, `data-id="${b.id}"`, 'warn'));
   const up = upcoming(dog)[0];
-  if (up) out.push(tile('Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), `tra ${plural(daysBetween(new Date(), toDate(up.due)), 'giorno', 'giorni')}`, `data-id="${up.r.id}"`));
+  if (up) out.push(tile(up.due < t ? 'Scaduto' : 'Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), whenTxt(up.due), `data-id="${up.r.id}"`, up.due <= t ? 'warn' : ''));
   if (!d.epi) { const v = list(dog, 'visita').filter(r => r.data.date <= t)[0]; if (v) out.push(tile('Ultima visita', esc(fmtDate(v.data.date).replace(/ \d{4}$/, '')), since(v.data.date), esc(v.data.motivo || ''), `data-id="${v.id}"`)); }
   return out.length ? `<div class="tiles">${out.slice(0, 6).join('')}</div>` : '';
 }
@@ -407,10 +442,12 @@ function viewHome() {
   if (d.epi && !readonly && !liveRec()) h += `<button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>`;
   h += homeTiles();
   if (!readonly) h += pillsCard();
+  if (d.epi && !readonly) h += dayLogCard();
+  h += recurringCard();
   h += section('Terapia in corso', therapyCards(dog));
   h += stockCard();
   const up = upcoming(dog).slice(0, 4);
-  if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>tra ${plural(daysBetween(new Date(), toDate(due)), 'giorno', 'giorni')}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`, `<button class="link" data-ics="up">📅</button>`);
+  if (up.length) h += section('In arrivo', `<div class="glass list">${up.map(({ r, due }) => `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small class="${due < today() ? 'late' : ''}">${whenTxt(due)}</small></div><div class="dt">${esc(fmtDate(due))}</div></div></div>`).join('')}</div>`, `<button class="link" data-ics="up">📅</button>`);
   h += section('Ultime voci', listHTML(list(dog).filter(r => r.data.date <= today()).slice(0, 5), 'Tocca + per aggiungere la prima voce'), `<button class="link" data-goto="diario">Vedi tutto</button>`);
   return h;
 }
@@ -472,6 +509,8 @@ function viewStats() {
   const pesi = list(dog, 'visita').filter(r => r.data.peso).slice(0, 6);
   if (pesi.length > 1) h += chartCard('Peso', 'Dalle visite', lineChart(pesi.slice().reverse().map(r => ({ x: toDate(r.data.date), y: +r.data.peso, l: fmtDate(r.data.date) })), COLORS.visita, ' kg'));
   else if (pesi.length) h += `<div class="glass card"><h2>Peso</h2>${pesi.map(r => `<div class="kv"><span>${esc(fmtDate(r.data.date))}</span><b>${esc(fmtNum(+r.data.peso))} kg</b></div>`).join('')}</div>`;
+  if (d.epi) h += factorsCard();
+  h += expensesCard();
   h += `<div class="glass card"><h2>Voci registrate</h2>${hbars(countBy(rs, r => KINDS[r.kind].name))}</div>`;
   return h;
 }
@@ -698,7 +737,7 @@ $('#frm').addEventListener('submit', e => {
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
   }
   for (const k of ['live', 'startTs', 'fine']) if (editing.data[k] != null && editing.kind === 'crisi') data[k] = editing.data[k];
-  if (KINDS[editing.kind].hidden) data.date ||= editing.data.date || today();
+  if (KINDS[editing.kind].hidden || KINDS[editing.kind].nodate) data.date ||= editing.data.date || today();
   if (!data.date) return toast('Inserisci il giorno');
   editing.data = data; save(editing); $('#form').close(); toast('Salvato ✓');
 });
@@ -884,7 +923,7 @@ function icsFile(events, name) {
   const st = d => d.replace(/[-:]/g, ''), now = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Diario Cani//IT', 'CALSCALE:GREGORIAN'];
   for (const e of events) lines.push('BEGIN:VEVENT', `UID:${uuid()}@diario-cani`, `DTSTAMP:${now}`, `DTSTART:${st(e.start)}`, `DTEND:${st(e.end || e.start)}`,
-    ...(e.daily ? ['RRULE:FREQ=DAILY'] : []), `SUMMARY:${e.title.replace(/[,;]/g, ' ')}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e.title.replace(/[,;]/g, ' ')}`, `TRIGGER:${e.alarm || 'PT0M'}`, 'END:VALARM', 'END:VEVENT');
+    ...(e.daily ? ['RRULE:FREQ=DAILY'] : e.rrule ? [e.rrule] : []), `SUMMARY:${e.title.replace(/[,;]/g, ' ')}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e.title.replace(/[,;]/g, ' ')}`, `TRIGGER:${e.alarm || 'PT0M'}`, 'END:VALARM', 'END:VEVENT');
   lines.push('END:VCALENDAR');
   const a = document.createElement('a'); a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(lines.join('\r\n')); a.download = name; a.click();
 }
@@ -896,8 +935,9 @@ function icsPills() {
   icsFile(ev, `pastiglie-${dog}.ics`);
 }
 function icsUpcoming() {
-  const name = curDog().name;
-  icsFile(upcoming(dog).map(({ r, due }) => ({ start: `${due}T09:00:00`, end: `${due}T09:30:00`, title: `${KINDS[r.kind].ic} ${name}: ${titleOf(r)}`, alarm: '-P1D' })), `scadenze-${dog}.ics`);
+  const name = curDog().name, FREQ = { giorni: 'DAILY', settimane: 'WEEKLY', mesi: 'MONTHLY', anni: 'YEARLY' };
+  icsFile(upcoming(dog).map(({ r, due }) => ({ start: `${due < today() ? today() : due}T09:00:00`, end: `${due < today() ? today() : due}T09:30:00`, title: `${KINDS[r.kind].ic} ${name}: ${titleOf(r)}`, alarm: r.kind === 'ricorrenza' ? 'PT0M' : '-P1D',
+    rrule: r.kind === 'ricorrenza' ? `RRULE:FREQ=${FREQ[r.data.unita || 'mesi']};INTERVAL=${+r.data.ogni || 1}` : '' })), `scadenze-${dog}.ics`);
 }
 
 // ---------- grafici: linee, livelli nel sangue, crisi con ogni terapia ----------
@@ -1002,7 +1042,7 @@ async function loadSettings() {
 const linkOf = scope => links.find(l => l.scope === scope);
 const copyBtn = (v, label = 'Copia') => `<button class="copy" data-copy="${esc(v)}">${label}</button>`;
 function settingsHTML() {
-  if (!sb || !user) return '<p class="muted">Le impostazioni richiedono l\'accesso con account.</p>';
+  if (!sb || !user) return `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${LS.get('cani.theme', 'auto') === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div></div><p class="muted">Le altre impostazioni richiedono l'accesso con account.</p>`;
   const isMember = ownerId && ownerId !== user.id, inv = linkOf('invito'), vet = linkOf('vet'), rap = linkOf('rapida');
   const vetUrl = vet && `${appUrl()}?vet=${vet.token}`;
   let h = `<div class="set-sec"><h3>👤 Account</h3><p>${esc(user.email)}</p>${isMember ? '<p class="muted small">Stai vedendo i cani della famiglia che ti ha invitato.</p>' : ''}</div>`;
@@ -1034,6 +1074,8 @@ function settingsHTML() {
   }
   h += `<div class="set-sec"><h3>🔑 Unisciti alla famiglia</h3><p class="small">Hai ricevuto un codice? Inseriscilo per vedere i cani di chi ti ha invitato.</p>
     <div class="row"><input id="joinCode" placeholder="Codice" autocapitalize="characters"><button class="btn" data-set="join">Entra</button></div></div>`;
+  const th = LS.get('cani.theme', 'auto');
+  h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div></div>`;
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
     <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>
     <button class="btn danger" data-set="logout">Esci</button>`;
@@ -1051,6 +1093,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
     if (act === 'join') { const { error } = await sb.rpc('join_family', { code: $('#joinCode').value }); if (error) throw error; records = {}; pending.clear(); persist(); await findOwner(); await sync(); toast('Ora fai parte della famiglia 🐾'); }
+    if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
     if (act === 'import') return $('#importFile').click();
     if (act === 'logout') { if (!confirm('Uscire dall\'account?')) return; await sb.auth.signOut(); localStorage.removeItem('cani.records'); localStorage.removeItem('cani.pending'); return location.reload(); }
@@ -1127,6 +1170,119 @@ view.addEventListener('input', e => {
   query = e.target.value; const pos = e.target.selectionStart; render();
   const q = $('#q'); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
 });
+
+// ---------- tema ----------
+function applyTheme() {
+  const v = LS.get('cani.theme', 'auto'), el = document.documentElement;
+  if (v === 'auto') delete el.dataset.theme; else el.dataset.theme = v;
+}
+applyTheme();
+
+// ---------- scadenze leggibili ----------
+const euro = v => (+v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+const whenTxt = due => { const n = daysBetween(toDate(today()), toDate(due)); return n < 0 ? `scaduto da ${plural(-n, 'giorno', 'giorni')}` : n === 0 ? 'oggi' : n === 1 ? 'domani' : `tra ${n} giorni`; };
+
+// ---------- promemoria ricorrenti (es. antiparassitario ogni mese) ----------
+const RTARGET = { Antiparassitario: 'vaccino', Vaccino: 'vaccino', Analisi: 'analisi', Visita: 'visita' };
+function lastDone(d, r) {
+  const k = drugKey(r.data.nome), kind = RTARGET[r.data.tipo];
+  const hit = kind && list(d, kind).find(x => x.data.date <= today() && drugKey(x.data.nome || x.data.tipo || x.data.motivo) === k);
+  const a = r.data.ultima || '', b = hit?.data.date || '';
+  return a > b ? a : b || null;
+}
+function nextDue(d, r) {
+  const last = lastDone(d, r); if (!last) return null;
+  const n = +r.data.ogni || 1, dt = toDate(last), u = r.data.unita || 'mesi';
+  if (u === 'giorni') dt.setDate(dt.getDate() + n); else if (u === 'settimane') dt.setDate(dt.getDate() + 7 * n);
+  else if (u === 'mesi') dt.setMonth(dt.getMonth() + n); else dt.setFullYear(dt.getFullYear() + n);
+  return isoOf(dt);
+}
+function recurringCard() {
+  const rs = list(dog, 'ricorrenza'); if (!rs.length) return '';
+  return section('Promemoria ricorrenti', `<div class="glass list">${rs.map(r => {
+    const due = nextDue(dog, r), last = lastDone(dog, r), late = due && due <= today();
+    return `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${late ? '#f5a623' : COLORS.vaccino}">🔁</div>
+      <div class="tx"><b>${esc(titleOf(r))}</b><small>${esc(KINDS.ricorrenza.sum(r.data))} · ${last ? 'ultima ' + esc(fmtDate(last).replace(/ \d{4}$/, '')) : 'ultima volta non segnata'}</small>
+      <small class="${late ? 'late' : ''}">${due ? (late ? '⚠️ ' : '') + whenTxt(due) + ' · ' + esc(fmtDate(due)) : 'tocca "Fatto" quando la dai'}</small></div>
+      ${readonly ? '' : `<button class="done-btn" data-done="${r.id}">✓ Fatto</button>`}</div></div>`;
+  }).join('')}</div>`, `<button class="link" data-ics="up">📅</button>`);
+}
+function markDone(id) {
+  const r = records[id], x = r.data, kind = RTARGET[x.tipo], t = today();
+  let made;
+  if (kind) {
+    const data = kind === 'vaccino' ? { date: t, nome: x.nome, note: [x.tipo, x.dose].filter(Boolean).join(' · ') } : kind === 'analisi' ? { date: t, tipo: x.nome } : { date: t, motivo: x.nome };
+    made = { id: uuid(), dog: r.dog, kind, data }; save(made);
+  } else { r.data = { ...x, ultima: t }; save(r); }
+  toast(`Segnato: ${x.nome} oggi`, { label: 'Annulla', fn: () => { if (made) { made.deleted = true; save(made); } else { r.data.ultima = x.ultima; save(r); } } });
+}
+
+// ---------- diario del giorno: possibili fattori scatenanti ----------
+const FATTORI = ['⛈️ Temporale o botti', '👥 Ospiti o visite', '🚗 Viaggio in auto', '🍖 Cibo diverso', '😴 Sonno agitato', '🎾 Molto gioco/eccitazione', '🔥 Caldo', '😰 Stress o spavento', '💊 Pastiglia in ritardo', '🩸 Calore', '🤢 Malessere', '✅ Giornata tranquilla'];
+let logDay = null;
+const dayLog = (d, day) => list(d, 'giorno').find(r => r.data.date === day);
+function dayLogCard() {
+  const day = logDay || today(), r = dayLog(dog, day), on = new Set(r?.data.fattori || []);
+  const label = day === today() ? 'Oggi' : day === dayAdd(today(), -1) ? 'Ieri' : fmtDate(day);
+  return section('Com\'è andata la giornata?', `<div class="glass card daylog">
+    <div class="dl-nav"><button class="link" data-logday="-1">‹</button><b>${esc(label)}</b><button class="link" data-logday="1" ${day >= today() ? 'disabled' : ''}>›</button></div>
+    <div class="chips">${FATTORI.map(f => `<label><input type="checkbox" data-factor="${esc(f)}"${on.has(f) ? ' checked' : ''}><span>${esc(f)}</span></label>`).join('')}</div>
+    <p class="small muted">Bastano pochi secondi al giorno: col tempo in Statistiche vedrai se le crisi arrivano più spesso dopo certe situazioni.</p></div>`);
+}
+function toggleFactor(f) {
+  const day = logDay || today(), r = dayLog(dog, day) || { id: uuid(), dog, kind: 'giorno', data: { date: day, fattori: [] } };
+  const set = new Set(r.data.fattori || []); set.has(f) ? set.delete(f) : set.add(f);
+  if (f === '✅ Giornata tranquilla' && set.has(f)) [...set].forEach(x => x !== f && set.delete(x)); else set.delete('✅ Giornata tranquilla');
+  r.data = { ...r.data, fattori: [...set] }; save(r);
+}
+// confronto: dopo un certo fattore, quante volte arriva una crisi entro il giorno dopo, rispetto al solito
+function factorsCard() {
+  const logs = list(dog, 'giorno').filter(r => r.data.fattori?.length); if (logs.length < 7) return `<div class="glass card"><h2>Possibili fattori scatenanti</h2><p class="muted small">Segna nel Riepilogo com'è andata ogni giornata. Dopo almeno una settimana di dati (ora: ${plural(logs.length, 'giorno', 'giorni')}) qui vedrai se qualche situazione porta più crisi.</p></div>`;
+  const crisisDays = new Set(list(dog, 'crisi').map(r => r.data.date));
+  const hit = day => crisisDays.has(day) || crisisDays.has(dayAdd(day, 1));
+  const base = logs.filter(r => hit(r.data.date)).length / logs.length;
+  const rows = FATTORI.filter(f => !f.startsWith('✅')).map(f => { const ds = logs.filter(r => r.data.fattori.includes(f)); return { f, n: ds.length, p: ds.length ? ds.filter(r => hit(r.data.date)).length / ds.length : 0 }; }).filter(x => x.n >= 3).sort((a, b) => b.p - a.p);
+  return `<div class="glass card"><div class="card-h"><h2>Possibili fattori scatenanti</h2><small>Crisi entro il giorno dopo · di solito nel ${Math.round(base * 100)}% dei giorni</small></div>
+    ${rows.length ? rows.map(x => `<div class="hb"><div><span>${esc(x.f)} <small class="muted">(${plural(x.n, 'giorno', 'giorni')})</small></span><b class="${x.p >= base * 2 && x.p > 0 ? 'hot' : ''}">${Math.round(x.p * 100)}%</b></div><i><i style="width:${x.p * 100}%;background:${x.p >= base * 2 && x.p > 0 ? COLORS.crisi : COLORS.terapia}"></i></i></div>`).join('') : '<p class="muted small">Servono almeno 3 giorni per ogni situazione.</p>'}
+    <p class="muted small">In rosso le situazioni con almeno il doppio delle crisi rispetto al solito. È solo un indizio da mostrare al veterinario, non una diagnosi.</p></div>`;
+}
+
+// ---------- spese veterinarie ----------
+let spYear = null;
+const catOf = r => r.kind === 'spesa' ? r.data.categoria || 'Altro' : r.kind === 'visita' ? 'Visita' : r.kind === 'analisi' ? 'Analisi' : r.kind === 'vaccino' ? (/nexgard|frontline|advantix|effitix|stronghold|advocate|drontal|endogard|antiparass|collare|pipetta|milbemax|bravecto|simparica/i.test(r.data.nome || '') ? 'Antiparassitari' : 'Vaccini') : 'Farmaci';
+const expenses = dogs => Object.values(records).filter(r => !r.deleted && dogs.includes(r.dog) && +r.data.costo > 0);
+function expensesCard() {
+  const mine = expenses([dog]), all = expenses(DOGS.map(d => d.id));
+  const years = [...new Set(all.map(r => r.data.date.slice(0, 4)))].sort().reverse();
+  if (!years.length) return `<div class="glass card"><h2>💶 Spese</h2><p class="muted small">Aggiungi il costo quando segni una visita, un'analisi, un vaccino, un farmaco o una confezione (campo "Costo"), oppure con ＋ → Spesa. Qui vedrai i totali dell'anno.</p></div>`;
+  const y = spYear && years.includes(spYear) ? spYear : years[0], inY = rs => rs.filter(r => r.data.date.startsWith(y));
+  const tot = rs => inY(rs).reduce((a, r) => a + +r.data.costo, 0);
+  const byCat = inY(mine).reduce((o, r) => (o[catOf(r)] = (o[catOf(r)] || 0) + +r.data.costo, o), {});
+  const months = Array.from({ length: 12 }, (_, i) => `${y}-${pad(i + 1)}`), mv = Object.fromEntries(months.map(m => [m, 0]));
+  inY(mine).forEach(r => mv[r.data.date.slice(0, 7)] += +r.data.costo);
+  const max = Math.max(...Object.values(byCat), 1);
+  return `<div class="glass card chart"><div class="card-h"><h2>💶 Spese</h2><small>${years.length > 1 ? years.map(v => `<button class="link${v === y ? ' on' : ''}" data-spyear="${v}">${v}</button>`).join(' ') : y}</small></div>
+    <div class="kv"><span>${esc(curDog().name)} nel ${y}</span><b>${euro(tot(mine))}</b></div>
+    <div class="kv"><span>Tutti e due i cani</span><b>${euro(tot(all))}</b></div>
+    ${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="hb"><div><span>${esc(k)}</span><b>${euro(v)}</b></div><i><i style="width:${v / max * 100}%;background:${COLORS.analisi}"></i></i></div>`).join('')}
+    ${barChart(months.map((m, i) => ({ l: new Date(m + '-01T12:00').toLocaleDateString('it-IT', { month: 'narrow' }), t: euro(mv[m]), v: Math.round(mv[m]) })), { color: COLORS.analisi, h: 120 })}
+    <button class="btn" data-spcsv="${y}">📊 Esporta le spese del ${y}</button>
+    <p class="muted small">Le spese veterinarie si possono detrarre in parte nella dichiarazione dei redditi: conserva le fatture e verifica con il CAF o il commercialista.</p></div>`;
+}
+function exportExpenses(y) {
+  const rs = expenses(DOGS.map(d => d.id)).filter(r => r.data.date.startsWith(y)).sort((a, b) => a.data.date.localeCompare(b.data.date));
+  const cell = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const lines = [['Giorno', 'Cane', 'Categoria', 'Cosa', 'Dove', 'Importo (€)'].join(';'), ...rs.map(r => [fmtDate(r.data.date), DOGS.find(d => d.id === r.dog).name, catOf(r), titleOf(r), r.data.dove || '', String(r.data.costo).replace('.', ',')].map(cell).join(';')),
+    ['', '', '', '', 'Totale', rs.reduce((a, r) => a + +r.data.costo, 0).toFixed(2).replace('.', ',')].join(';')];
+  shareFile(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `spese-cani-${y}.csv`);
+}
+view.addEventListener('click', e => {
+  const dn = e.target.closest('[data-done]'); if (dn) { e.stopImmediatePropagation(); return markDone(dn.dataset.done); }
+  const ld = e.target.closest('[data-logday]'); if (ld) { e.stopImmediatePropagation(); const n = dayAdd(logDay || today(), +ld.dataset.logday); logDay = n > today() ? today() : n; return render(); }
+  const fc = e.target.closest('[data-factor]'); if (fc) { e.stopImmediatePropagation(); e.preventDefault(); return toggleFactor(fc.dataset.factor); }
+  const sy = e.target.closest('[data-spyear]'); if (sy) { e.stopImmediatePropagation(); spYear = sy.dataset.spyear; return render(); }
+  const sc = e.target.closest('[data-spcsv]'); if (sc) { e.stopImmediatePropagation(); return exportExpenses(sc.dataset.spcsv); }
+}, true);
 
 // ---------- accesso ----------
 async function findOwner() {

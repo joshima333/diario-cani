@@ -4,11 +4,17 @@
   --line:rgba(60,45,120,.1);--shadow:0 12px 40px rgba(70,45,160,.14);--bg:#efeaff;
   --r:24px;
 }
-@media (prefers-color-scheme:dark){:root{
+/* tema: automatico (segue l'iPhone), oppure chiaro/scuro scelto nelle impostazioni */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --text:#f4f1ff;--muted:#a39dbf;--accent:#a493ff;
   --glass:rgba(42,36,72,.5);--glass2:rgba(62,55,100,.62);--edge:rgba(255,255,255,.14);
   --line:rgba(255,255,255,.08);--shadow:0 12px 40px rgba(0,0,0,.45);--bg:#0e0b1c;
 }}
+:root[data-theme="dark"]{
+  --text:#f4f1ff;--muted:#a39dbf;--accent:#a493ff;
+  --glass:rgba(42,36,72,.5);--glass2:rgba(62,55,100,.62);--edge:rgba(255,255,255,.14);
+  --line:rgba(255,255,255,.08);--shadow:0 12px 40px rgba(0,0,0,.45);--bg:#0e0b1c;
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);
   font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
@@ -27,7 +33,8 @@ body.zoe .bg i:nth-child(1){background:#ffb86b}
 body.zoe .bg i:nth-child(2){background:#ff8fa3}
 body.zoe .bg i:nth-child(3){background:#8de0b5}
 @keyframes float{to{transform:translate(6vmax,4vmax) scale(1.08)}}
-@media (prefers-color-scheme:dark){.bg i{opacity:.32}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bg i{opacity:.32}}
+:root[data-theme="dark"] .bg i{opacity:.32}
 @media (prefers-reduced-motion:reduce){.bg i{animation:none}}
 
 .glass{background:var(--glass);border:1px solid var(--edge);border-radius:var(--r);
@@ -384,3 +391,15 @@ body.readonly .tabbar{margin-left:0;width:min(420px,calc(100% - 32px))}
 .bands .bn{fill:var(--muted);font-size:8.5px;font-weight:700}
 .bands .bl{fill:#fff;font-size:7.5px;font-weight:700}
 #print .bands .bl{fill:#000}
+
+/* promemoria ricorrenti, diario del giorno, spese, tema */
+.done-btn{border:0;border-radius:999px;padding:8px 12px;font-weight:700;font-size:.82rem;color:#fff;background:var(--ok);flex:none}
+.tx small.late{color:#f5a623;font-weight:600}
+.daylog .dl-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.daylog .dl-nav .link{font-size:1.5rem;padding:0 10px}.daylog .dl-nav .link:disabled{opacity:.25}
+.daylog .chips{gap:8px}
+.hb b.hot{color:#ff5f7e}
+.link.on{text-decoration:underline;font-weight:800}
+.seg3{display:flex;gap:4px;padding:4px;border-radius:14px;background:var(--glass2)}
+.seg3 button{flex:1;border:0;background:none;color:var(--muted);font-weight:600;padding:9px 4px;border-radius:10px}
+.seg3 button.on{background:var(--accent);color:#fff}
