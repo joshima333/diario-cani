@@ -659,6 +659,9 @@ $('#importFile').onchange = e => { const f = e.target.files[0]; e.target.value =
 const TITLES = { home: () => 'Riepilogo', diario: () => 'Diario', stats: () => 'Statistiche', vet: () => 'Veterinario' };
 function render() {
   if ($('#app').hidden) return;
+  try { renderInner(); } catch (err) { console.error(err); $('#view').innerHTML = `<div class="glass card"><b>Ops, qualcosa non va.</b><p class="small muted">${esc(err.message)}</p><p class="small muted">Manda uno screenshot di questo messaggio.</p></div><button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>`; }
+}
+function renderInner() {
   closeSwipe(true);
   $('#dogSeg').innerHTML = DOGS.map(d => `<button data-dog="${d.id}" class="${d.id === dog ? 'on' : ''}">${avatar(d.id, 26)}<span>${d.name}</span></button>`).join('');
   document.body.classList.toggle('zoe', dog === 'zoe');
@@ -1193,7 +1196,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
     if (act === 'import') return $('#importFile').click();
-    if (act === 'logout') { if (!confirm('Uscire dall\'account?')) return; await sb.auth.signOut(); localStorage.removeItem('cani.records'); localStorage.removeItem('cani.pending'); return location.reload(); }
+    if (act === 'logout') { if (!confirm('Uscire dall\'account?')) return; await sb.auth.signOut(); localStorage.removeItem('cani.user'); localStorage.removeItem('cani.records'); localStorage.removeItem('cani.pending'); return location.reload(); }
     await loadSettings(); $('#setBody').innerHTML = settingsHTML();
   } catch (err) { toast(/schema cache|does not exist|relation/.test(err.message) ? 'Prima esegui schema-2.sql su Supabase' : err.message); }
 });
@@ -1576,16 +1579,24 @@ async function doLogin(signup) {
   const r = signup ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href } }) : await sb.auth.signInWithPassword({ email, password });
   if (r.error) return msg.textContent = r.error.message === 'Invalid login credentials' ? 'Email o password errati' : r.error.message;
   if (!r.data.session) return msg.textContent = 'Controlla la posta per confermare l\'email, poi accedi.';
-  user = r.data.user; showApp();
+  user = r.data.user; LS.set('cani.user', { id: user.id, email: user.email }); showApp();
 }
 $('#lGo').onclick = () => doLogin(false);
 $('#lNew').onclick = () => doLogin(true);
 
+// avvio: l'app si apre SUBITO con i dati salvati sul telefono (anche senza rete);
+// l'accesso e la sincronizzazione arrivano dopo, senza bloccare niente
 (async () => {
   if (!sb) return showApp(); // senza Supabase: solo sul telefono
   const vetToken = new URLSearchParams(location.search).get('vet');
   if (vetToken) return openVetLink(vetToken);
-  const { data } = await sb.auth.getSession();
-  user = data.session?.user || null;
-  if (user) showApp(); else { $('#login').hidden = false; if (inviteCode) $('#lIntro').textContent = 'Sei stata invitata a seguire Kafka e Zoe 🐾 Crea un account con la tua email (o accedi), poi entri in automatico.'; }
+  const known = LS.get('cani.user', null);
+  if (known) { user = known; showApp(); }
+  let session = null;
+  try { session = (await Promise.race([sb.auth.getSession(), new Promise((_, ko) => setTimeout(() => ko(new Error('lento')), 6000))])).data.session; }
+  catch (err) { console.warn('accesso non verificato', err); if (known) { setSync('off'); return; } if (Object.keys(records).length) { showApp(); setSync('off'); return; } }
+  user = session?.user || null;
+  if (user) { LS.set('cani.user', { id: user.id, email: user.email }); if (!known) showApp(); else { await findOwner().catch(() => {}); sync(); } }
+  else if (known && session === null) { localStorage.removeItem('cani.user'); location.reload(); }
+  else { $('#login').hidden = false; if (inviteCode) $('#lIntro').textContent = 'Sei stata invitata a seguire Kafka e Zoe 🐾 Crea un account con la tua email (o accedi), poi entri in automatico.'; }
 })();
