@@ -114,6 +114,7 @@ const KINDS = {
   ricetta: {
     ic: '🧾', name: 'Ricetta',
     fields: [
+      { k: '_scan', t: 'scan' },
       { k: '_dog', l: 'Per quale cane', t: 'dogsel' },
       { k: 'date', l: 'Data della ricetta', t: 'date' },
       { k: 'farmaco', l: 'Farmaco', t: 'text', list: 'farmaci' },
@@ -728,6 +729,8 @@ function fieldHTML(f, d) {
     case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><div class="stars-l"><span>lieve</span><span>molto forte</span></div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
     case 'dur': { const s = +d[f.store || 'durSec'] || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="${f.k}Min" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="${f.k}S" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
     case 'docs': return lab + `<div class="docs" data-docs>${[].concat(v || []).map(docThumb).join('')}<label class="doc-add">＋<input type="file" accept="image/*" multiple data-docfile hidden></label></div><input type="hidden" name="${f.k}" value="${esc(JSON.stringify([].concat(v || [])))}">`;
+    case 'scan': return `<div class="scan"><label class="btn primary scan-btn">📷 Fotografa la ricetta<input type="file" accept="image/*" data-scan hidden></label>
+      <button type="button" class="link" data-pastetxt>📋 Incolla testo</button><p id="scanMsg" class="small muted">Scatta una foto: leggo io farmaco, data, scadenza, numero e PIN.</p></div>`;
     case 'dogsel': return lab + `<div class="seg3 dogsel">${DOGS.map(x => `<label><input type="radio" name="_dog" value="${x.id}"${(editing?.dog || dog) === x.id ? ' checked' : ''}><span>${avatar(x.id, 22)} ${esc(x.name)}</span></label>`).join('')}</div>`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
@@ -772,6 +775,7 @@ $('#frm').addEventListener('submit', e => {
   for (const f of KINDS[editing.kind].fields) {
     if (f.t === 'dur') { const s = (+fd.get(f.k + 'Min') || 0) * 60 + (+fd.get(f.k + 'S') || 0); if (s) data[f.store || 'durSec'] = s; continue; }
     if (f.t === 'chips') { const a = fd.getAll(f.k); if (a.length) data[f.k] = a; continue; }
+    if (f.t === 'scan') continue;
     if (f.t === 'dogsel') { if (fd.get('_dog')) editing.dog = fd.get('_dog'); continue; }
     if (f.t === 'docs') { const a = JSON.parse(fd.get(f.k) || '[]'); if (a.length) data[f.k] = a; continue; }
     const v = (fd.get(f.k) || '').trim();
@@ -1289,6 +1293,74 @@ function markBought(id) {
   setTimeout(() => $('#frm [name=costo]')?.focus(), 350);
   $('#form').addEventListener('close', () => { dog = prev; render(); }, { once: true });
 }
+
+// ---------- leggi la ricetta dalla foto (tutto sul telefono, gratis) ----------
+let tessP = null;
+const loadTess = () => tessP ||= new Promise((ok, ko) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload = () => ok(window.Tesseract); s.onerror = () => { tessP = null; ko(new Error('Serve internet per leggere la foto')); }; document.head.appendChild(s); });
+const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+function datesIn(s) {
+  const out = [];
+  for (const m of s.matchAll(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/g)) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; if (+m[2] <= 12 && +m[1] <= 31) out.push({ i: m.index, v: `${y}-${pad(+m[2])}-${pad(+m[1])}` }); }
+  for (const m of s.matchAll(/\b(\d{1,2})\s+([a-zà]{3})[a-zà]*\s+(\d{4})\b/gi)) { const mi = MESI.indexOf(m[2].toLowerCase()); if (mi >= 0) out.push({ i: m.index, v: `${m[3]}-${pad(mi + 1)}-${pad(+m[1])}` }); }
+  return out.sort((a, b) => a.i - b.i);
+}
+// dal testo letto ai campi della ricetta
+function parseRx(text) {
+  const t = text.replace(/[|]/g, 'I'), low = t.toLowerCase(), out = {};
+  const near = (re, len = 60) => { const m = low.match(re); return m ? t.slice(m.index, m.index + m[0].length + len) : ''; };
+  const pin = near(/\bpin\b[^\n]{0,15}/, 20).match(/\bpin\b\D{0,12}(\d{4,10})/i); if (pin) out.pin = pin[1];
+  const num = near(/(n(umero|r|\.)?\s*(di\s+)?ricetta|ricetta\s*(n|nr|numero)\.?|codice\s+ricetta|id\s+ricetta)/, 40).match(/(\d[\d\s]{6,22}\d)/); if (num) out.numero = num[1].replace(/\s+/g, '');
+  const ds = datesIn(t);
+  const scadZone = near(/(scad|valid|entro il|utilizzabile fino|fino al)/, 40); const sd = datesIn(scadZone)[0]; if (sd) out.scadenza = sd.v;
+  const emZone = near(/(data\s+(di\s+)?(emissione|prescrizione|rilascio)|emess[ao]|rilasciat[ao]|del\s+\d)/, 40); const ed = datesIn(emZone)[0] || ds.find(d => d.v !== out.scadenza); if (ed) out.date = ed.v;
+  // farmaco: riga con il nome commerciale (vicino a "medicinale/farmaco/prodotto" o con mg/cpr)
+  const lines = t.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+  const known = [...new Set(Object.values(records).filter(r => r.data?.farmaco).map(r => r.data.farmaco.split(' (')[0]))];
+  const kn = known.find(k => low.includes(drugKey(k)));
+  if (kn) out.farmaco = kn;
+  else {
+    const li = lines.findIndex(l => /medicinal|farmac|prodotto|specialit|denominazion/i.test(l));
+    const cand = (li >= 0 ? [lines[li].replace(/^.*?(medicinale|farmaco|prodotto|specialit[aà]|denominazione)\s*[:\-]?\s*/i, ''), lines[li + 1]] : []).concat(lines.filter(l => /\b\d+([.,]\d+)?\s?(mg|ml|g)\b|compress|cpr|capsul|gocce|sciroppo/i.test(l)));
+    const f = cand.find(l => l && l.length > 2 && !/ricetta|pin|data|codice|veterinari|proprietari|animale|microchip/i.test(l)); if (f) out.farmaco = f.replace(/\s{2,}/g, ' ').slice(0, 60);
+  }
+  const q = t.match(/(\d+)\s*(confezion[ei]|conf\.?|scatol[ae])/i); if (q) out.quantita = `${q[1]} ${/^1$/.test(q[1]) ? 'confezione' : 'confezioni'}`;
+  // cane: nome o microchip
+  for (const d of DOGS) { const chip = profile(d.id).microchip; if (new RegExp(`\\b${d.name}\\b`, 'i').test(t) || (chip && t.replace(/\s/g, '').includes(chip))) { out._dog = d.id; break; } }
+  const vet = lines.find(l => /dott\.?|dr\.?|ambulatorio|clinica/i.test(l)); if (vet) out.vet = vet.slice(0, 60);
+  return out;
+}
+function fillRx(found, raw) {
+  const form = $('#frm'), set = [];
+  const put = (name, v, label) => { const el = form.querySelector(`[name="${name}"]`); if (!el || v == null) return; if (el.type === 'radio') return; if (!el.value || name === 'scadenza' || name === 'date') { el.value = v; el.classList.add('filled'); set.push(label); } };
+  if (found._dog) { const r = form.querySelector(`[name="_dog"][value="${found._dog}"]`); if (r) { r.checked = true; set.push('cane'); } }
+  put('farmaco', found.farmaco, 'farmaco'); put('date', found.date, 'data'); put('scadenza', found.scadenza, 'scadenza'); put('quantita', found.quantita, 'quantità');
+  put('numero', [found.numero, found.pin && 'PIN ' + found.pin].filter(Boolean).join(' · ') || null, 'numero/PIN');
+  const note = form.querySelector('[name="note"]'); if (note && raw && !note.value) note.value = 'Testo letto dalla foto:\n' + raw.trim().slice(0, 1500);
+  $('#scanMsg').innerHTML = set.length ? `✓ Ho compilato: <b>${set.join(', ')}</b>. Controlla che sia tutto giusto${found.scadenza ? '' : ' — la <b>scadenza</b> non l\'ho trovata, scrivila tu'}.` : 'Non sono riuscita a leggere i dati: prova una foto più dritta e illuminata, oppure usa "Incolla testo".';
+}
+async function scanRxPhoto(file) {
+  const msg = $('#scanMsg'); msg.textContent = 'Preparo la lettura… (la prima volta ci vuole qualche secondo in più)';
+  try {
+    const T = await loadTess(), blob = await shrinkImage(file, 2000);
+    const { data } = await T.recognize(blob, 'ita', { logger: m => { if (m.status === 'recognizing text') msg.textContent = `Leggo la ricetta… ${Math.round(m.progress * 100)}%`; } });
+    fillRx(parseRx(data.text), data.text);
+  } catch (err) { msg.textContent = err.message || 'Lettura non riuscita'; }
+}
+$('#fBody').addEventListener('change', e => {
+  if (!e.target.matches('[data-scan]') || !e.target.files[0]) return;
+  const f = e.target.files[0];
+  // la stessa foto viene anche allegata alla ricetta
+  const docIn = $('#fBody [data-docfile]');
+  if (docIn && sb && user) { const dt = new DataTransfer(); dt.items.add(f); docIn.files = dt.files; docIn.dispatchEvent(new Event('change', { bubbles: true })); }
+  scanRxPhoto(f); e.target.value = '';
+});
+$('#fBody').addEventListener('click', async e => {
+  if (!e.target.closest('[data-pastetxt]')) return;
+  e.preventDefault();
+  let txt = ''; try { txt = await navigator.clipboard.readText(); } catch {}
+  if (!txt) txt = prompt('Incolla qui il testo della ricetta (sull\'iPhone: apri la foto, tieni premuto sul testo → Seleziona tutto → Copia)') || '';
+  if (txt.trim()) fillRx(parseRx(txt), txt);
+});
 
 // ---------- tema ----------
 function applyTheme() {

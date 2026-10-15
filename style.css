@@ -517,3 +517,7 @@ h1.large{font-size:2rem}
 .dogsel input{display:none}
 .dogsel span{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;border-radius:10px;font-weight:600}
 .dogsel input:checked+span{background:var(--accent);color:#fff}
+.scan{text-align:center;padding:12px;border-radius:18px;border:2px dashed color-mix(in srgb,var(--accent) 50%,transparent);margin:6px 0 4px}
+.scan-btn{display:block;margin:0 0 6px;text-transform:none;letter-spacing:0;font-size:1rem;color:#fff}
+.scan p{margin:6px 0 0}
+input.filled,textarea.filled{border-color:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent)}
