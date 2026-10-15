@@ -460,8 +460,8 @@ function homeTiles() {
   const rg = courseRange(dog);
   if (rg && rg.to >= t) { const tot = daysBetween(toDate(rg.from), toDate(rg.to)) + 1, n = Math.min(tot, daysBetween(toDate(rg.from), toDate(t)) + 1); out.push(tile('Cura in corso', `giorno ${n}/${tot}`, `fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ''))}`, `<i class="bar"><i style="width:${n / tot * 100}%"></i></i>`)); }
   for (const b of stockStatus(dog).filter(b => b.daysLeft != null && b.daysLeft <= b.warn)) out.push(tile('Sta finendo', esc(b.farmaco), b.daysLeft <= 0 ? 'finita' : `per ${plural(b.daysLeft, 'giorno', 'giorni')}`, `circa ${fmtNum(Math.max(0, b.left))} compresse`, `data-id="${b.id}"`, 'warn'));
-  const up = upcoming(dog).find(x => !rxs.some(r => r.id === x.r.id));
   const rxs = openRx(dog).filter(r => r.data.scadenza && daysBetween(toDate(t), toDate(r.data.scadenza)) <= 5);
+  const up = upcoming(dog).find(x => !rxs.some(r => r.id === x.r.id));
   if (rxs.length) out.push(tile(rxs[0].data.scadenza < t ? 'Ricetta scaduta' : 'Ricetta in scadenza', esc(rxs[0].data.farmaco || 'Ricetta'), esc(fmtDate(rxs[0].data.scadenza)), whenTxt(rxs[0].data.scadenza) + (rxs.length > 1 ? ` · altre ${rxs.length - 1}` : ''), `data-id="${rxs[0].id}"`, 'warn'));
   if (up) out.push(tile(up.due < t ? 'Scaduto' : 'Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), whenTxt(up.due), `data-id="${up.r.id}"`, up.due <= t ? 'warn' : ''));
   if (!d.epi) { const v = list(dog, 'visita').filter(r => r.data.date <= t)[0]; if (v) out.push(tile('Ultima visita', esc(fmtDate(v.data.date).replace(/ \d{4}$/, '')), since(v.data.date), esc(v.data.motivo || ''), `data-id="${v.id}"`)); }
@@ -665,7 +665,10 @@ function render() {
   $('#subtitle').textContent = tab === 'home' && !readonly ? subtitleText() : '';
   const live = liveRec();
   setTimeout(popTicked, 0);
-  $('#view').innerHTML = (live ? liveHTML(live) : '') + { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab]();
+  let body = '';
+  try { body = { home: viewHome, diario: viewDiario, stats: viewStats, vet: viewVet }[tab](); }
+  catch (err) { console.error(err); body = `<div class="glass card"><b>Ops, qualcosa non va in questa pagina.</b><p class="small muted">${esc(err.message)}</p><p class="small muted">Il pulsante crisi qui sotto funziona comunque. Manda uno screenshot di questo messaggio.</p></div>` + (curDog().epi && !readonly && !live ? `<button class="sos" data-live="start"><span>⚡</span><b>Crisi adesso</b><small>avvia il cronometro</small></button>` : ''); }
+  $('#view').innerHTML = (live ? liveHTML(live) : '') + body;
   $('#gear').hidden = readonly; $('#fab').hidden = readonly;
   loadDocThumbs($('#view'));
   document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
