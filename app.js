@@ -111,6 +111,25 @@ const KINDS = {
     fields: [{ k: 'slots', l: 'Una riga per pastiglia: ora e cosa', t: 'area', ph: '08:00 Phenoleptil 3/4\n20:00 Libromide 1/2\n23:00 Phenoleptil 3/4' }],
     sum: () => '',
   },
+  ricetta: {
+    ic: '🧾', name: 'Ricetta',
+    fields: [
+      { k: '_dog', l: 'Per quale cane', t: 'dogsel' },
+      { k: 'date', l: 'Data della ricetta', t: 'date' },
+      { k: 'farmaco', l: 'Farmaco', t: 'text', list: 'farmaci' },
+      { k: 'quantita', l: 'Quantità prescritta', t: 'text', ph: 'es. 2 confezioni' },
+      { k: 'scadenza', l: 'Scade il (vedi sulla ricetta)', t: 'date' },
+      { k: 'numero', l: 'Numero ricetta / codice PIN', t: 'text' },
+      { k: 'docs', l: 'Foto della ricetta', t: 'docs' },
+      { k: 'stato', l: 'Stato', t: 'select', o: ['Da comprare', 'Comprata', 'Non serve più'], def: 'Da comprare' },
+      { k: 'acquisto', l: 'Comprata il', t: 'date' },
+      { k: 'costo', l: 'Prezzo pagato (€)', t: 'num', step: '0.01' },
+      { k: 'dove', l: 'Farmacia', t: 'text', list: 'dove' },
+      { k: 'note', l: 'Note', t: 'area' },
+    ],
+    title: d => d.farmaco ? 'Ricetta · ' + d.farmaco : 'Ricetta',
+    sum: d => d.stato === 'Comprata' ? ['Comprata', d.costo && euro(d.costo)].filter(Boolean).join(' · ') : d.stato === 'Non serve più' ? 'Non serve più' : d.scadenza ? 'Da comprare · scade ' + fmtDate(d.scadenza) : 'Da comprare',
+  },
   spesa: {
     ic: '💶', name: 'Spesa',
     fields: [
@@ -234,7 +253,7 @@ const list = (dog, kind) => Object.values(records)
 let dog = LS.get('cani.dog', 'kafka'), tab = 'home', filter = '', range = 6;
 const curDog = () => DOGS.find(d => d.id === dog);
 const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
-const COLORS = { crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa', spesa: '#f5b400', scorta: '#22c3c3', ricorrenza: '#2fc28b', giorno: '#a78bfa', dose: '#22c27a', dosemod: '#8b7bff', programma: '#8b7bff' };
+const COLORS = { ricetta: '#ec4899', crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa', spesa: '#f5b400', scorta: '#22c3c3', ricorrenza: '#2fc28b', giorno: '#a78bfa', dose: '#22c27a', dosemod: '#8b7bff', programma: '#8b7bff' };
 const profileId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000000a' : '00000000000b');
 const profile = d => records[profileId(d)]?.data || {};
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -261,7 +280,8 @@ function currentTherapy(d) {
 }
 function upcoming(d) {
   const t = today(), out = [], seen = {};
-  for (const r of list(d)) { if (r.kind === 'ricorrenza') continue; const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
+  for (const r of list(d)) { if (r.kind === 'ricorrenza') continue; if (r.kind === 'ricetta') { if (r.data.stato !== 'Comprata' && r.data.stato !== 'Non serve più' && r.data.scadenza) out.push({ r, due: r.data.scadenza }); continue; }
+    const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
   for (const r of list(d, 'ricorrenza')) { const due = nextDue(d, r); if (due) out.push({ r, due }); }
   return out.sort((a, b) => a.due.localeCompare(b.due)).filter(x => { const k = x.r.kind + titleOf(x.r); return seen[k] ? false : (seen[k] = 1); });
 }
@@ -372,7 +392,7 @@ function itemHTML(r, { swipe = !readonly } = {}) {
 const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass list">${arr.length ? arr.map(r => itemHTML(r, opt)).join('') : `<div class="empty">${empty}</div>`}</div>`;
 // sezioni richiudibili: si apre/chiude toccando il titolo, la scelta resta salvata
 const folds = new Set(LS.get('cani.fold', []));
-const SEC_IC = [[/pastiglie/i, '💊'], [/calendario/i, '🗓️'], [/giornata/i, '📝'], [/ricorrenti/i, '🔁'], [/terapia in corso/i, '🩺'], [/storia della terapia/i, '📜'], [/scorte/i, '📦'], [/arrivo/i, '🔔'], [/ultime voci/i, '🕘'], [/^crisi$/i, '⚡'], [/analisi/i, '🩸'], [/visit/i, '🩺'], [/vaccin/i, '💉'], [/problem/i, '🤒'], [/spes/i, '💶']];
+const SEC_IC = [[/ricette/i, '🧾'], [/pastiglie/i, '💊'], [/calendario/i, '🗓️'], [/giornata/i, '📝'], [/ricorrenti/i, '🔁'], [/terapia in corso/i, '🩺'], [/storia della terapia/i, '📜'], [/scorte/i, '📦'], [/arrivo/i, '🔔'], [/ultime voci/i, '🕘'], [/^crisi$/i, '⚡'], [/analisi/i, '🩸'], [/visit/i, '🩺'], [/vaccin/i, '💉'], [/problem/i, '🤒'], [/spes/i, '💶']];
 const section = (title, body, extra = '') => {
   const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key), ic = (SEC_IC.find(([re]) => re.test(key)) || [, '📅'])[1];
   return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}" role="button" onclick="if(!event.target.closest('button'))toggleFold(this)"><h3><span class="sec-ic">${/^[A-Za-zÀ-ÿ]/.test(key) && /^\d{4}$/.test(key.slice(-4)) ? '📅' : ic}</span>${title}<i class="chev">›</i></h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
@@ -411,7 +431,7 @@ function heroCard() {
 
 // ---------- viste ----------
 // riquadri "a colpo d'occhio": solo ciò che conta adesso, in ordine di importanza
-const TILE_IC = [[/da dare/i, '⏰'], [/pastiglia/i, '💊'], [/crisi questo/i, '⚡'], [/ultima crisi/i, '📅'], [/media/i, '📈'], [/cura/i, '🩹'], [/finendo/i, '📦'], [/scadenza|scaduto/i, '🔔'], [/visita/i, '🩺']];
+const TILE_IC = [[/ricetta/i, '🧾'], [/da dare/i, '⏰'], [/pastiglia/i, '💊'], [/crisi questo/i, '⚡'], [/ultima crisi/i, '📅'], [/media/i, '📈'], [/cura/i, '🩹'], [/finendo/i, '📦'], [/scadenza|scaduto/i, '🔔'], [/visita/i, '🩺']];
 const tile = (label, big, sub = '', em = '', attrs = '', cls = '') => `<div class="glass tile${attrs ? ' tap' : ''} ${cls}" ${attrs}><i class="t-ic">${(TILE_IC.find(([re]) => re.test(label)) || [, ''])[1]}</i><small>${label}</small><b class="${String(big).length > 6 ? 'sm' : ''}">${big}</b>${sub ? `<span>${sub}</span>` : ''}${em ? `<em>${em}</em>` : ''}</div>`;
 const inTime = mins => mins < 60 ? `tra ${mins} min` : `tra ${Math.floor(mins / 60)} h${mins % 60 ? ' ' + (mins % 60) + ' min' : ''}`;
 function nextDose(d) {
@@ -440,7 +460,9 @@ function homeTiles() {
   const rg = courseRange(dog);
   if (rg && rg.to >= t) { const tot = daysBetween(toDate(rg.from), toDate(rg.to)) + 1, n = Math.min(tot, daysBetween(toDate(rg.from), toDate(t)) + 1); out.push(tile('Cura in corso', `giorno ${n}/${tot}`, `fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ''))}`, `<i class="bar"><i style="width:${n / tot * 100}%"></i></i>`)); }
   for (const b of stockStatus(dog).filter(b => b.daysLeft != null && b.daysLeft <= b.warn)) out.push(tile('Sta finendo', esc(b.farmaco), b.daysLeft <= 0 ? 'finita' : `per ${plural(b.daysLeft, 'giorno', 'giorni')}`, `circa ${fmtNum(Math.max(0, b.left))} compresse`, `data-id="${b.id}"`, 'warn'));
-  const up = upcoming(dog)[0];
+  const up = upcoming(dog).find(x => !rxs.some(r => r.id === x.r.id));
+  const rxs = openRx(dog).filter(r => r.data.scadenza && daysBetween(toDate(t), toDate(r.data.scadenza)) <= 5);
+  if (rxs.length) out.push(tile(rxs[0].data.scadenza < t ? 'Ricetta scaduta' : 'Ricetta in scadenza', esc(rxs[0].data.farmaco || 'Ricetta'), esc(fmtDate(rxs[0].data.scadenza)), whenTxt(rxs[0].data.scadenza) + (rxs.length > 1 ? ` · altre ${rxs.length - 1}` : ''), `data-id="${rxs[0].id}"`, 'warn'));
   if (up) out.push(tile(up.due < t ? 'Scaduto' : 'Prossima scadenza', esc(titleOf(up.r)), esc(fmtDate(up.due)), whenTxt(up.due), `data-id="${up.r.id}"`, up.due <= t ? 'warn' : ''));
   if (!d.epi) { const v = list(dog, 'visita').filter(r => r.data.date <= t)[0]; if (v) out.push(tile('Ultima visita', esc(fmtDate(v.data.date).replace(/ \d{4}$/, '')), since(v.data.date), esc(v.data.motivo || ''), `data-id="${v.id}"`)); }
   if (out.length) out[0] = out[0].replace('class="glass tile', 'class="glass tile prime');
@@ -452,6 +474,7 @@ function viewHome() {
   h += homeTiles();
   if (!readonly) h += pillsCard();
   if (!readonly) h += dayLogCard();
+  h += rxCard();
   h += recurringCard();
   h += section('Terapia in corso', therapyCards(dog));
   h += stockCard();
@@ -702,6 +725,7 @@ function fieldHTML(f, d) {
     case 'stars': return lab + `<div class="stars" data-k="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${+v === i ? 'on' : ''}" data-v="${i}">${i}</button>`).join('')}</div><div class="stars-l"><span>lieve</span><span>molto forte</span></div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
     case 'dur': { const s = +d[f.store || 'durSec'] || 0; return lab + `<div class="two"><input type="number" inputmode="numeric" min="0" name="${f.k}Min" placeholder="minuti" value="${s ? Math.floor(s / 60) : ''}"><input type="number" inputmode="numeric" min="0" max="59" name="${f.k}S" placeholder="secondi" value="${s ? s % 60 : ''}"></div>`; }
     case 'docs': return lab + `<div class="docs" data-docs>${[].concat(v || []).map(docThumb).join('')}<label class="doc-add">＋<input type="file" accept="image/*" multiple data-docfile hidden></label></div><input type="hidden" name="${f.k}" value="${esc(JSON.stringify([].concat(v || [])))}">`;
+    case 'dogsel': return lab + `<div class="seg3 dogsel">${DOGS.map(x => `<label><input type="radio" name="_dog" value="${x.id}"${(editing?.dog || dog) === x.id ? ' checked' : ''}><span>${avatar(x.id, 22)} ${esc(x.name)}</span></label>`).join('')}</div>`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
 }
@@ -745,6 +769,7 @@ $('#frm').addEventListener('submit', e => {
   for (const f of KINDS[editing.kind].fields) {
     if (f.t === 'dur') { const s = (+fd.get(f.k + 'Min') || 0) * 60 + (+fd.get(f.k + 'S') || 0); if (s) data[f.store || 'durSec'] = s; continue; }
     if (f.t === 'chips') { const a = fd.getAll(f.k); if (a.length) data[f.k] = a; continue; }
+    if (f.t === 'dogsel') { if (fd.get('_dog')) editing.dog = fd.get('_dog'); continue; }
     if (f.t === 'docs') { const a = JSON.parse(fd.get(f.k) || '[]'); if (a.length) data[f.k] = a; continue; }
     const v = (fd.get(f.k) || '').trim();
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
@@ -1244,6 +1269,24 @@ view.addEventListener('input', e => {
   const q = $('#q'); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
 });
 
+// ---------- ricette da comprare ----------
+const openRx = d => list(d, 'ricetta').filter(r => r.data.stato !== 'Comprata' && r.data.stato !== 'Non serve più');
+function rxCard() {
+  const rs = openRx(dog).sort((a, b) => (a.data.scadenza || '9').localeCompare(b.data.scadenza || '9')); if (!rs.length) return '';
+  return section('Ricette da comprare', `<div class="glass list">${rs.map(r => {
+    const late = r.data.scadenza && daysBetween(toDate(today()), toDate(r.data.scadenza)) <= 5;
+    return `<div class="item" data-id="${r.id}"><div class="sc"><div class="ic" style="--c:${late ? '#f5a623' : COLORS.ricetta}">🧾</div>
+      <div class="tx"><b>${esc(r.data.farmaco || 'Ricetta')}${r.data.docs?.length ? ' <span class="clip">📎</span>' : ''}</b><small class="${late ? 'late' : ''}">${r.data.scadenza ? (late ? '⚠️ ' : '') + 'scade ' + whenTxt(r.data.scadenza).replace(/^tra /, 'tra ') + ' · ' + esc(fmtDate(r.data.scadenza)) : 'scadenza non inserita'}</small></div>
+      ${readonly ? '' : `<button class="done-btn" data-bought="${r.id}">✓ Comprata</button>`}</div></div>`;
+  }).join('')}</div>`);
+}
+function markBought(id) {
+  const r = records[id], prev = dog; dog = r.dog;
+  openForm('ricetta', { ...r, data: { ...r.data, stato: 'Comprata', acquisto: today() } });
+  setTimeout(() => $('#frm [name=costo]')?.focus(), 350);
+  $('#form').addEventListener('close', () => { dog = prev; render(); }, { once: true });
+}
+
 // ---------- tema ----------
 function applyTheme() {
   const v = LS.get('cani.theme', 'auto'), el = document.documentElement;
@@ -1324,7 +1367,7 @@ function factorsCard() {
 // ---------- spese veterinarie ----------
 let spYear = null;
 const catOf = r => r.kind === 'spesa' ? r.data.categoria || 'Altro' : r.kind === 'visita' ? 'Visita' : r.kind === 'analisi' ? 'Analisi' : r.kind === 'vaccino' ? (/nexgard|frontline|advantix|effitix|stronghold|advocate|drontal|endogard|antiparass|collare|pipetta|milbemax|bravecto|simparica/i.test(r.data.nome || '') ? 'Antiparassitari' : 'Vaccini') : 'Farmaci';
-const expenses = dogs => Object.values(records).filter(r => !r.deleted && dogs.includes(r.dog) && +r.data.costo > 0);
+const expenses = dogs => Object.values(records).filter(r => !r.deleted && dogs.includes(r.dog) && +r.data.costo > 0).map(r => r.kind === 'ricetta' && r.data.acquisto ? { ...r, data: { ...r.data, date: r.data.acquisto } } : r);
 function expensesCard() {
   const mine = expenses([dog]), all = expenses(DOGS.map(d => d.id));
   const years = [...new Set(all.map(r => r.data.date.slice(0, 4)))].sort().reverse();
@@ -1353,6 +1396,7 @@ function exportExpenses(y) {
   shareFile(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `spese-cani-${y}.csv`);
 }
 view.addEventListener('click', e => {
+  const bo = e.target.closest('[data-bought]'); if (bo) { e.stopImmediatePropagation(); return markBought(bo.dataset.bought); }
   const dn = e.target.closest('[data-done]'); if (dn) { e.stopImmediatePropagation(); return markDone(dn.dataset.done); }
   const ld = e.target.closest('[data-logday]'); if (ld) { e.stopImmediatePropagation(); const n = dayAdd(logDay || today(), +ld.dataset.logday); logDay = n > today() ? today() : n; return render(); }
   const fc = e.target.closest('[data-factor]'); if (fc) { e.stopImmediatePropagation(); e.preventDefault(); return toggleFactor(fc.dataset.factor); }
