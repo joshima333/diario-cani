@@ -1133,8 +1133,12 @@ function settingsHTML() {
       ${inv ? `<div class="code">${esc(inv.token)}</div><div class="row"><button class="btn" data-share="${esc(msg)}">Invia l'invito</button><button class="btn" data-set="del:invito">Nuovo codice</button></div>`
       : `<button class="btn primary" data-set="new:invito">Crea un codice invito</button>`}</div>`;
   }
-  h += `<div class="set-sec"><h3>🔑 Unisciti alla famiglia</h3><p class="small">Hai ricevuto un codice? Inseriscilo per vedere i cani di chi ti ha invitato.</p>
-    <div class="row"><input id="joinCode" placeholder="Codice" autocapitalize="characters"><button class="btn" data-set="join">Entra</button></div></div>`;
+  const hasOwnData = !isMember && Object.values(records).some(r => !r.deleted && r.kind === 'crisi');
+  h += `<div class="set-sec join"><h3>🔑 Unisciti alla famiglia</h3>
+    <p class="small">${hasOwnData ? '<b>Questa parte non serve a te</b>: è per chi ha ricevuto il tuo invito (es. tua madre), dal <b>suo</b> telefono e con il <b>suo</b> account.' : 'Hai ricevuto un codice? Scrivilo qui sotto e premi Entra.'}</p>
+    <label for="joinCode">Codice invito</label>
+    <input id="joinCode" class="code-in" placeholder="es. K7PQ2M" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="12">
+    <button class="btn" data-set="join">Entra</button></div>`;
   const th = LS.get('cani.theme', 'auto');
   h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div></div>`;
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
@@ -1153,7 +1157,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'new') { const { error } = await sb.from('pet_links').insert({ token: arg === 'invito' ? token(6) : token(24), scope: arg }); if (error) throw error; }
     if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
-    if (act === 'join') { if (!$('#joinCode').value.trim()) return toast('Scrivi il codice'); return joinFamily($('#joinCode').value); }
+    if (act === 'join') { if (!$('#joinCode').value.trim()) { $('#joinCode').focus(); return toast('Tocca il riquadro "Codice invito" e scrivi il codice'); } return joinFamily($('#joinCode').value); }
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
     if (act === 'import') return $('#importFile').click();
