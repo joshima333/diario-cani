@@ -186,7 +186,8 @@ const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx
 const titleOf = r => (KINDS[r.kind].title || (() => KINDS[r.kind].name))(r.data);
 // avviso in basso, con un'azione opzionale (es. Annulla)
 function toast(msg, action) {
-  const t = $('#toast'); t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ''}`; t.hidden = false;
+  const host = document.querySelector('dialog[open]'), t = $('#toast');
+  if (host && t.parentElement !== host) host.appendChild(t); else if (!host && t.parentElement !== document.body) document.body.appendChild(t); t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ''}`; t.hidden = false;
   if (action) t.querySelector('button').onclick = () => { t.hidden = true; action.fn(); };
   clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, action ? 4500 : 2200);
 }
@@ -1125,7 +1126,7 @@ function settingsHTML() {
       ${vet ? `<p class="small">Chi ha questo link vede il report aggiornato in sola lettura, senza account.</p><code>${esc(vetUrl)}</code>
       <div class="row"><button class="btn" data-share="${esc(vetUrl)}">Condividi</button>${copyBtn(vetUrl, 'Copia')}</div><button class="link danger" data-set="del:vet">Disattiva il link</button>`
       : `<p class="small">Un link privato al report sempre aggiornato, da mandare al veterinario.</p><button class="btn primary" data-set="new:vet">Crea il link</button>`}</div>`;
-    const msg = inv && `Ciao! Per vedere e segnare i dati di Kafka e Zoe: apri ${appUrl()} , crea un account, poi tocca ⚙️ → "Unisciti alla famiglia" e inserisci il codice ${inv.token}`;
+    const msg = inv && `Ciao! Per vedere e segnare i dati di Kafka e Zoe apri questo link e crea un account con la tua email: ${appUrl()}?invito=${inv.token}\n(Se serve, il codice è ${inv.token}: ⚙️ → Unisciti alla famiglia)`;
     h += `<div class="set-sec"><h3>👨‍👩‍👧 Famiglia</h3>
       <p class="small">Chi inviti può vedere e segnare tutto, anche da Android o dal computer.</p>
       ${members.map(m => `<div class="kv"><span>${esc(m.member_email || 'Familiare')}</span><button class="link danger" data-set="rm:${m.member}">Togli</button></div>`).join('')}
@@ -1152,7 +1153,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'new') { const { error } = await sb.from('pet_links').insert({ token: arg === 'invito' ? token(6) : token(24), scope: arg }); if (error) throw error; }
     if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
-    if (act === 'join') { const { error } = await sb.rpc('join_family', { code: $('#joinCode').value }); if (error) throw error; records = {}; pending.clear(); persist(); await findOwner(); await sync(); toast('Ora fai parte della famiglia 🐾'); }
+    if (act === 'join') { if (!$('#joinCode').value.trim()) return toast('Scrivi il codice'); return joinFamily($('#joinCode').value); }
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
     if (act === 'import') return $('#importFile').click();
@@ -1160,6 +1161,14 @@ $('#setBody').addEventListener('click', async e => {
     await loadSettings(); $('#setBody').innerHTML = settingsHTML();
   } catch (err) { toast(/schema cache|does not exist|relation/.test(err.message) ? 'Prima esegui schema-2.sql su Supabase' : err.message); }
 });
+
+async function joinFamily(code) {
+  const { error } = await sb.rpc('join_family', { code: String(code).trim() });
+  if (error) { const m = /tuo stesso/.test(error.message) ? 'Questo è il tuo codice: va inserito dall\'account dell\'altra persona' : /non valido/.test(error.message) ? 'Codice non valido: controlla le lettere' : error.message; alert(m); return false; }
+  records = {}; pending.clear(); persist(); await findOwner(); await sync();
+  $('#settings').open && $('#settings').close(); render(); toast('Ora fai parte della famiglia 🐾');
+  return true;
+}
 
 // ---------- link del veterinario: sola lettura, senza account ----------
 async function openVetLink(t) {
@@ -1428,10 +1437,14 @@ async function findOwner() {
   const { data } = await sb.from('pet_members').select('owner').eq('member', user.id).limit(1);
   ownerId = data?.[0]?.owner || user.id;
 }
+const inviteCode = (() => { const c = new URLSearchParams(location.search).get('invito'); if (c) LS.set('cani.invito', c); return c || LS.get('cani.invito', ''); })();
 async function showApp() {
   $('#login').hidden = true;['#app', '#tabbar', '#fab'].forEach(s => $(s).hidden = false);
   render();
-  if (!readonly) { await findOwner().catch(() => {}); sync(); }
+  if (readonly) return;
+  await findOwner().catch(() => {});
+  if (inviteCode && sb && user && ownerId === user.id) { localStorage.removeItem('cani.invito'); history.replaceState(null, '', location.pathname); if (await joinFamily(inviteCode)) return; }
+  sync();
 }
 async function doLogin(signup) {
   const email = $('#lEmail').value.trim(), password = $('#lPass').value, msg = $('#lMsg');
@@ -1451,5 +1464,5 @@ $('#lNew').onclick = () => doLogin(true);
   if (vetToken) return openVetLink(vetToken);
   const { data } = await sb.auth.getSession();
   user = data.session?.user || null;
-  if (user) showApp(); else $('#login').hidden = false;
+  if (user) showApp(); else { $('#login').hidden = false; if (inviteCode) $('#lIntro').textContent = 'Sei stata invitata a seguire Kafka e Zoe 🐾 Crea un account con la tua email (o accedi), poi entri in automatico.'; }
 })();
