@@ -642,3 +642,18 @@ html[data-style="cane"] #splash{background:var(--bg)}
 html[data-style="cane"] .hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 40%,#141210),#141210);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 14px 36px rgba(0,0,0,.5)}
 html[data-style="cane"] .streak{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18)}
 html[data-style="cane"] .streak b{color:#fff;background:none}
+
+/* ===================== Fluidità su iPhone =====================
+   la sfocatura "vetro" costa molto quando si scorre: resta solo sui comandi fissi
+   (barra in alto, barra in basso, +, finestre); i pannelli del contenuto usano un vetro "dipinto",
+   identico a vedersi su sfondo scuro ma senza ricalcoli durante lo scorrimento. */
+#view .glass,#view .sos,#view .pill,#view .search,.filters .pill{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+#view .glass{background-color:color-mix(in srgb,var(--bg) 70%,#2a2724)}
+html:not([data-style="cane"]) #view .glass{background-color:color-mix(in srgb,var(--bg) 55%,var(--glass2))}
+.item .sc{will-change:auto}
+.item.swipe .sc{will-change:auto}
+/* sfondo: sfumature statiche invece di macchie sfocate animate */
+.bg i{display:none}
+.bg{background:radial-gradient(120% 60% at 0% 0%,color-mix(in srgb,var(--dog,#8b7bff) 22%,transparent),transparent 60%),radial-gradient(100% 50% at 100% 100%,color-mix(in srgb,var(--dog2,#ff7eb3) 14%,transparent),transparent 60%)}
+html[data-style="cane"] .bg{background:radial-gradient(120% 55% at 0% 0%,color-mix(in srgb,var(--acc) 16%,transparent),transparent 60%),radial-gradient(90% 45% at 100% 100%,color-mix(in srgb,var(--acc2) 8%,transparent),transparent 60%)}
+body.scrolled .top{-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
