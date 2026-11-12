@@ -1182,7 +1182,8 @@ function settingsHTML() {
     <input id="joinCode" class="code-in" placeholder="es. K7PQ2M" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="12">
     <button class="btn" data-set="join">Entra</button></div>`;
   const th = LS.get('cani.theme', 'auto');
-  h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div></div>`;
+  h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div>
+    <div class="seg3" style="margin-top:8px">${[['glass', 'Vetro bianco e nero'], ['color', 'Colorato']].map(([v, l]) => `<button class="${LS.get('cani.style', 'glass') === v ? 'on' : ''}" data-set="style:${v}">${l}</button>`).join('')}</div></div>`;
   h += trashHTML();
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
     <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>
@@ -1201,6 +1202,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
     if (act === 'join') { if (!$('#joinCode').value.trim()) { $('#joinCode').focus(); return toast('Tocca il riquadro "Codice invito" e scrivi il codice'); } return joinFamily($('#joinCode').value); }
+    if (act === 'style') { LS.set('cani.style', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'restore') { const r = records[arg]; if (r) { r.deleted = false; save(r); toast('Ripristinato ✓'); } return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
@@ -1380,10 +1382,32 @@ function trashHTML() {
   return `<div class="set-sec"><h3>🗑️ Eliminati di recente</h3>${rs.length ? `<p class="small muted">Tocca "Ripristina" per rimettere una voce come prima.</p>${rs.map(r => `<div class="kv trash"><span>${KINDS[r.kind].ic} <b>${esc(titleOf(r))}</b><br><small>${esc(DOGS.find(d => d.id === r.dog)?.name || '')} · ${esc(fmtDate(r.data.date))}${r.updated ? ' · eliminato il ' + new Date(r.updated).toLocaleDateString('it-IT') : ''}</small></span><button class="done-btn" data-set="restore:${r.id}">Ripristina</button></div>`).join('')}` : '<p class="small muted">Nessuna voce eliminata.</p>'}</div>`;
 }
 
+// ---------- fogli: trascina verso il basso per chiudere ----------
+document.querySelectorAll('dialog.sheet').forEach(dl => {
+  const card = dl.querySelector('.card'); let y0 = null, dy = 0, fromTop = false;
+  card.addEventListener('touchstart', e => {
+    if (e.target.closest('input,textarea,select,.cal,.chips')) { y0 = null; return; }
+    const rect = card.getBoundingClientRect(); fromTop = e.touches[0].clientY - rect.top < 60;
+    y0 = (card.scrollTop <= 0 || fromTop) ? e.touches[0].clientY : null; dy = 0;
+  }, { passive: true });
+  card.addEventListener('touchmove', e => {
+    if (y0 == null) return; dy = e.touches[0].clientY - y0;
+    if (dy <= 0) { card.style.transform = ''; return; }
+    if (card.scrollTop > 0 && !fromTop) { y0 = null; card.style.transform = ''; return; }
+    e.preventDefault(); card.style.transition = 'none'; card.style.transform = `translateY(${dy}px)`;
+  }, { passive: false });
+  card.addEventListener('touchend', () => {
+    if (y0 == null) return; y0 = null; card.style.transition = 'transform .25s ease';
+    if (dy > 110) { card.style.transform = 'translateY(100%)'; setTimeout(() => { dl.close(); card.style.transform = ''; card.style.transition = ''; }, 220); }
+    else card.style.transform = '';
+  });
+});
+
 // ---------- tema ----------
 function applyTheme() {
   const v = LS.get('cani.theme', 'auto'), el = document.documentElement;
   if (v === 'auto') delete el.dataset.theme; else el.dataset.theme = v;
+  el.dataset.style = LS.get('cani.style', 'glass');
 }
 applyTheme();
 
