@@ -1177,6 +1177,7 @@ function settingsHTML() {
     <button class="btn" data-set="join">Entra</button></div>`;
   const th = LS.get('cani.theme', 'auto');
   h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div></div>`;
+  h += trashHTML();
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
     <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>
     <button class="btn danger" data-set="logout">Esci</button>`;
@@ -1195,6 +1196,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
     if (act === 'join') { if (!$('#joinCode').value.trim()) { $('#joinCode').focus(); return toast('Tocca il riquadro "Codice invito" e scrivi il codice'); } return joinFamily($('#joinCode').value); }
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
+    if (act === 'restore') { const r = records[arg]; if (r) { r.deleted = false; save(r); toast('Ripristinato ✓'); } return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'backup') return exportBackup();
     if (act === 'import') return $('#importFile').click();
     if (act === 'logout') { if (!confirm('Uscire dall\'account?')) return; await sb.auth.signOut(); localStorage.removeItem('cani.user'); localStorage.removeItem('cani.records'); localStorage.removeItem('cani.pending'); return location.reload(); }
@@ -1365,6 +1367,12 @@ $('#fBody').addEventListener('click', async e => {
   if (!txt) txt = prompt('Incolla qui il testo della ricetta (sull\'iPhone: apri la foto, tieni premuto sul testo → Seleziona tutto → Copia)') || '';
   if (txt.trim()) fillRx(parseRx(txt), txt);
 });
+
+// ---------- cestino: le voci eliminate si possono ripristinare ----------
+function trashHTML() {
+  const rs = Object.values(records).filter(r => r.deleted && KINDS[r.kind] && !['dose', 'dosemod', 'giorno'].includes(r.kind)).sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 40);
+  return `<div class="set-sec"><h3>🗑️ Eliminati di recente</h3>${rs.length ? `<p class="small muted">Tocca "Ripristina" per rimettere una voce come prima.</p>${rs.map(r => `<div class="kv trash"><span>${KINDS[r.kind].ic} <b>${esc(titleOf(r))}</b><br><small>${esc(DOGS.find(d => d.id === r.dog)?.name || '')} · ${esc(fmtDate(r.data.date))}${r.updated ? ' · eliminato il ' + new Date(r.updated).toLocaleDateString('it-IT') : ''}</small></span><button class="done-btn" data-set="restore:${r.id}">Ripristina</button></div>`).join('')}` : '<p class="small muted">Nessuna voce eliminata.</p>'}</div>`;
+}
 
 // ---------- tema ----------
 function applyTheme() {
