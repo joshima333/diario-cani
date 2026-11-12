@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it" data-style="glass">
+<html lang="it" data-style="cane" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -11,9 +11,12 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=1794506321">
+<link rel="stylesheet" href="style.css?v=1794506745">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="lens" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+  <feImage result="map" preserveAspectRatio="none" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3ClinearGradient id='x'%3E%3Cstop offset='0' stop-color='%23f00'/%3E%3Cstop offset='.12' stop-color='%23800'/%3E%3Cstop offset='.88' stop-color='%23800'/%3E%3Cstop offset='1' stop-color='%23000'/%3E%3C/linearGradient%3E%3ClinearGradient id='y' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%230f0'/%3E%3Cstop offset='.2' stop-color='%23080'/%3E%3Cstop offset='.8' stop-color='%23080'/%3E%3Cstop offset='1' stop-color='%23000'/%3E%3C/linearGradient%3E%3Crect width='100' height='100' fill='url(%23x)'/%3E%3Crect width='100' height='100' fill='url(%23y)' style='mix-blend-mode:screen'/%3E%3C/svg%3E"/>
+  <feDisplacementMap in="SourceGraphic" in2="map" scale="22" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
 <div class="bg"><i></i><i></i><i></i></div>
 <div id="splash"><div class="sp-avs"></div><b>Diario Cani</b><small>Kafka &amp; Zoe</small></div>
 
@@ -130,7 +133,7 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=1794506321"></script>
-<script src="voice.js?v=1794506321"></script>
+<script src="app.js?v=1794506745"></script>
+<script src="voice.js?v=1794506745"></script>
 </body>
 </html>

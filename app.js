@@ -94,6 +94,7 @@ const KINDS = {
     ic: '🐾', name: 'Profilo', hidden: true,
     fields: [
       { k: 'foto', l: 'Foto', t: 'photo' },
+      { k: 'sfondo', l: 'Foto dietro al pannello (orizzontale)', t: 'wall' },
       { k: 'nascita', l: 'Data di nascita', t: 'date' },
       { k: 'razza', l: 'Razza', t: 'text' },
       { k: 'sesso', l: 'Sesso', t: 'select', o: ['Femmina', 'Maschio'] },
@@ -426,7 +427,8 @@ function heroCard() {
     const n = st.last ? Math.max(0, daysBetween(toDate(st.last.data.date), new Date())) : null;
     right = `<div class="streak"><b>${n ?? '—'}</b><small>${n === 1 ? 'giorno' : 'giorni'} senza crisi</small></div>`;
   }
-  return `<div class="glass hero" data-profile${p.foto ? ` style="--photo:url('${esc(p.foto)}')"` : ''}>
+  const bgp = p.sfondo || p.foto;
+  return `<div class="glass hero${p.sfondo ? ' has-wall' : ''}" data-profile${bgp ? ` style="--photo:url('${esc(bgp)}')"` : ''}>
     ${avatar(dog, 72)}
     <div class="hero-tx"><h2>${esc(d.name)}</h2><p>${esc(ageOf(dog))}</p><small>${esc(bits) || 'Tocca per completare il profilo ›'}</small></div>${right}</div>`;
 }
@@ -740,6 +742,7 @@ function fieldHTML(f, d) {
     case 'scan': return `<div class="scan"><label class="btn primary scan-btn">📷 Fotografa la ricetta<input type="file" accept="image/*" data-scan hidden></label>
       <button type="button" class="link" data-pastetxt>📋 Incolla testo</button><p id="scanMsg" class="small muted">Scatta una foto: leggo io farmaco, data, scadenza, numero e PIN.</p></div>`;
     case 'dogsel': return lab + `<div class="seg3 dogsel">${DOGS.map(x => `<label><input type="radio" name="_dog" value="${x.id}"${(editing?.dog || dog) === x.id ? ' checked' : ''}><span>${avatar(x.id, 22)} ${esc(x.name)}</span></label>`).join('')}</div>`;
+    case 'wall': return lab + `<label class="wall-pick" style="${v ? `background-image:url('${esc(v)}')` : ''}">${v ? '' : '<b>🖼️ Scegli una foto</b>'}<input type="file" accept="image/*" data-wall hidden></label><div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">Meglio una foto orizzontale con il cane a destra. Il testo resta leggibile a sinistra.</span>${v ? '<button type="button" class="link" data-wallrm>Togli</button>' : ''}</div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
 }
@@ -770,6 +773,15 @@ $('#fBody').addEventListener('click', e => {
   const wrap = b.parentElement, inp = wrap.parentElement.querySelector(`input[name="${wrap.dataset.k}"]`), v = b.dataset.v === inp.value ? '' : b.dataset.v;
   inp.value = v; wrap.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
 });
+$('#fBody').addEventListener('change', async e => {
+  if (!e.target.matches('[data-wall]') || !e.target.files[0]) return;
+  try {
+    const blob = await shrinkImage(e.target.files[0], 1100), url = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
+    const lab = e.target.closest('.wall-pick'); lab.style.backgroundImage = `url('${url}')`; lab.querySelector('b')?.remove();
+    lab.parentElement.querySelector('input[name="sfondo"]').value = url;
+  } catch { toast('Foto non leggibile'); }
+});
+$('#fBody').addEventListener('click', e => { if (!e.target.closest('[data-wallrm]')) return; const inp = $('#fBody input[name="sfondo"]'); inp.value = ''; $('#fBody .wall-pick').style.backgroundImage = ''; e.target.remove(); });
 $('#fBody').addEventListener('change', async e => {
   if (!e.target.matches('[data-photo]') || !e.target.files[0]) return;
   try {
@@ -1189,7 +1201,8 @@ function settingsHTML() {
     <button class="btn" data-set="join">Entra</button></div>`;
   const th = LS.get('cani.theme', 'auto');
   h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div>
-    <div class="seg3" style="margin-top:8px">${[['glass', 'Vetro bianco e nero'], ['color', 'Colorato']].map(([v, l]) => `<button class="${LS.get('cani.style', 'glass') === v ? 'on' : ''}" data-set="style:${v}">${l}</button>`).join('')}</div></div>`;
+    <div class="seg3" style="margin-top:8px">${[['cane', 'Vetro scuro'], ['glass', 'Bianco e nero'], ['color', 'Colorato']].map(([v, l]) => `<button class="${LS.get('cani.style', 'cane') === v ? 'on' : ''}" data-set="style:${v}">${l}</button>`).join('')}</div>
+    <button class="btn" data-set="wallpaper">🖼️ Foto dietro al pannello di ${esc(curDog().name)}</button></div>`;
   h += trashHTML();
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
     <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>
@@ -1208,6 +1221,7 @@ $('#setBody').addEventListener('click', async e => {
     if (act === 'del') { if (!confirm('Confermi? Il vecchio codice smetterà di funzionare.')) return; await sb.from('pet_links').delete().eq('scope', arg).eq('owner', user.id); if (arg === 'invito') await sb.from('pet_links').insert({ token: token(6), scope: 'invito' }); }
     if (act === 'rm') { if (!confirm('Togliere questa persona dalla famiglia?')) return; await sb.from('pet_members').delete().eq('owner', user.id).eq('member', arg); }
     if (act === 'join') { if (!$('#joinCode').value.trim()) { $('#joinCode').focus(); return toast('Tocca il riquadro "Codice invito" e scrivi il codice'); } return joinFamily($('#joinCode').value); }
+    if (act === 'wallpaper') { $('#settings').close(); return openForm('profilo', records[profileId(dog)] || { id: profileId(dog), dog, kind: 'profilo', data: {} }); }
     if (act === 'style') { LS.set('cani.style', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'theme') { LS.set('cani.theme', arg); applyTheme(); return ($('#setBody').innerHTML = settingsHTML()); }
     if (act === 'restore') { const r = records[arg]; if (r) { r.deleted = false; save(r); toast('Ripristinato ✓'); } return ($('#setBody').innerHTML = settingsHTML()); }
@@ -1412,7 +1426,8 @@ document.querySelectorAll('dialog.sheet').forEach(dl => {
 function applyTheme() {
   const v = LS.get('cani.theme', 'auto'), el = document.documentElement;
   if (v === 'auto') delete el.dataset.theme; else el.dataset.theme = v;
-  el.dataset.style = LS.get('cani.style', 'glass');
+  el.dataset.style = LS.get('cani.style', 'cane');
+  if (el.dataset.style === 'cane') el.dataset.theme = 'dark';
 }
 applyTheme();
 
