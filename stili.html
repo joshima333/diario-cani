@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stili a confronto</title>
+<style>
+  body{margin:0;background:#1b1b1f;color:#f5f5f7;font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;padding:16px}
+  h1{font-size:1.5rem;margin:6px 4px 4px}
+  .intro{color:#a8a8b0;margin:0 4px 18px;max-width:640px}
+  .grid{display:flex;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:16px}
+  .opt{scroll-snap-align:center;flex:none}
+  .opt h2{font-size:1.05rem;margin:0 0 2px 6px}.opt p{margin:0 0 10px 6px;color:#a8a8b0;font-size:.85rem;max-width:300px}
+  .phone{width:300px;height:620px;border-radius:44px;overflow:hidden;position:relative;border:6px solid #000;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .scr{position:absolute;inset:0;padding:16px 14px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+  .wall{position:absolute;inset:0;background:url(icon-512.png) center/cover}
+  .top{display:flex;justify-content:space-between;align-items:center}
+  .seg{display:flex;gap:2px;padding:3px;border-radius:99px}
+  .seg span{padding:5px 12px;border-radius:99px;font-weight:600;font-size:.8rem}
+  .gear{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:.8rem}
+  .hi{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;margin:4px 2px 0}
+  .sub{font-size:.78rem;margin:-4px 2px 0}
+  .hero{display:flex;gap:10px;align-items:center;padding:12px;border-radius:24px}
+  .av{width:48px;height:48px;border-radius:50%;background:url(icon-512.png) 25% 20%/220%}
+  .hero b{display:block;font-size:1.15rem}.hero small{font-size:.75rem}
+  .streak{margin-left:auto;text-align:center;padding:6px 10px;border-radius:16px}
+  .streak b{font-size:1.3rem}.streak small{display:block;font-size:.6rem}
+  .sos{padding:12px 14px;border-radius:22px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff4d6d,#ff7a59)}
+  .tile{padding:12px 14px;border-radius:22px}
+  .tile small{font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .tile b{display:block;font-size:1.7rem;font-weight:800}
+  .tile .row{display:flex;justify-content:space-between;align-items:center}
+  .give{padding:6px 12px;border-radius:99px;font-weight:700;font-size:.8rem}
+  .list{border-radius:22px;overflow:hidden}
+  .li{display:flex;gap:10px;align-items:center;padding:9px 12px;font-size:.82rem}
+  .li+.li{border-top:1px solid var(--ln)}
+  .chk{width:18px;height:18px;border-radius:50%;border:2px solid currentColor;opacity:.6;flex:none}
+  .chk.ok{background:#22c27a;border-color:#22c27a;opacity:1}
+  .tab{position:absolute;left:12px;right:70px;bottom:14px;display:flex;justify-content:space-around;padding:8px 4px;border-radius:99px;font-size:.62rem;font-weight:600}
+  .tab span.on{font-weight:800}
+  .fab{position:absolute;right:12px;bottom:14px;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:1.6rem}
+
+  /* ===== 1. Liquid Glass ===== vetro chiaro e spesso sopra la foto: bordi luminosi, riflesso in alto, rifrazione dei colori */
+  .lg{--ln:rgba(255,255,255,.18);color:#fff}
+  .lg .wall{filter:saturate(1.1)}
+  .lg .wall::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.35))}
+  .lg .g:not(.tab):not(.fab){position:relative}
+  .lg .g{background:rgba(255,255,255,.14);-webkit-backdrop-filter:blur(10px) saturate(190%) brightness(1.08);backdrop-filter:blur(10px) saturate(190%) brightness(1.08);
+    box-shadow:inset 1.5px 1.5px 0 rgba(255,255,255,.75),inset -1px -1px 0 rgba(255,255,255,.25),inset 0 0 22px rgba(255,255,255,.18),0 10px 30px rgba(0,0,0,.28)}
+  .lg .g::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,0) 38%,rgba(255,255,255,0) 70%,rgba(255,255,255,.12))}
+  .lg .thick{background:rgba(30,30,36,.42);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%)}
+  .lg .hi,.lg .sub,.lg .hero b{text-shadow:0 1px 8px rgba(0,0,0,.45)}
+  .lg .sub,.lg small{color:rgba(255,255,255,.82)}
+  .lg .give{background:#fff;color:#111}
+  .lg .seg span.on{background:rgba(255,255,255,.35)}
+
+  /* ===== 2. Carta ===== avorio caldo, grafite, vetro satinato */
+  .carta{--ln:rgba(60,45,30,.1);color:#2b2621;background:#f4efe6}
+  .carta .wall{display:none}
+  .carta .g{background:rgba(255,253,248,.75);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 1px 0 #fff inset,0 6px 20px rgba(80,60,30,.10);border:1px solid rgba(255,255,255,.9)}
+  .carta .sub,.carta small{color:#8a7f72}
+  .carta .tile.main{background:#2b2621;color:#f4efe6}.carta .tile.main small{color:#cfc5b8}
+  .carta .give{background:#f4efe6;color:#2b2621}
+  .carta .seg span.on{background:#2b2621;color:#f4efe6}
+  .carta .sos{background:#c4453a}
+  .carta .bgblob{position:absolute;inset:0;background:radial-gradient(circle at 80% 10%,#ead9c0,transparent 50%),radial-gradient(circle at 10% 90%,#e3e7d6,transparent 50%)}
+
+  /* ===== 3. Notte profonda ===== nero puro, vetro fumé, un solo accento salvia */
+  .notte{--ln:rgba(255,255,255,.08);color:#ececf0;background:#000}
+  .notte .wall{display:none}
+  .notte .g{background:rgba(255,255,255,.06);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.06)}
+  .notte .sub,.notte small{color:#8d8d96}
+  .notte .tile.main{background:rgba(143,175,139,.16);box-shadow:inset 0 0 0 1px rgba(143,175,139,.45)}
+  .notte .tile.main b{color:#a9c9a4}
+  .notte .give{background:#8faf8b;color:#000}
+  .notte .seg span.on{background:rgba(255,255,255,.14)}
+  .notte .fab{background:#8faf8b;color:#000}
+  .notte .bgblob{position:absolute;inset:0;background:radial-gradient(circle at 85% 0%,rgba(143,175,139,.18),transparent 45%)}
+
+  /* ===== 4. Colore del cane ===== neutro, accento rame (Kafka) */
+  .cane{--ln:rgba(0,0,0,.07);color:#18181b;background:#f3f1ef}
+  .cane .wall{display:none}
+  .cane .g{background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 #fff,0 8px 24px rgba(0,0,0,.07)}
+  .cane .sub,.cane small{color:#7b7570}
+  .cane .tile.main{background:linear-gradient(135deg,#a0522d,#c97a45);color:#fff}.cane .tile.main small{color:rgba(255,255,255,.85)}
+  .cane .give{background:#fff;color:#a0522d}
+  .cane .seg span.on{background:#a0522d;color:#fff}
+  .cane .fab{background:#a0522d;color:#fff}
+  .cane .bgblob{position:absolute;inset:0;background:radial-gradient(circle at 90% 0%,rgba(201,122,69,.22),transparent 50%)}
+</style>
+</head>
+<body>
+<h1>Stili a confronto</h1>
+<p class="intro">Scorri di lato e dimmi il numero che preferisci, anche mescolando (es. "1 ma con l'accento del 4"). Sono esempi statici del Riepilogo, con dati finti.</p>
+<div class="grid" id="grid"></div>
+<script>
+const OPTS = [
+  ['lg', '1 · Liquid Glass', 'Come iOS 26: la foto dei cani fa da sfondo e il vetro spesso e trasparente la rifrange, con bordi luminosi. Liste su vetro più scuro per leggere bene.'],
+  ['carta', '2 · Carta', 'Avorio caldo e grafite, vetro satinato. Morbido, molto leggibile, "da diario".'],
+  ['notte', '3 · Notte profonda', 'Nero puro (risparmia batteria), vetro fumé e un solo colore: verde salvia.'],
+  ['cane', '4 · Colore del cane', 'Neutro chiaro con un accento preso dal pelo: rame per Kafka (miele per Zoe).'],
+];
+const phone = c => `<div class="phone ${c}"><div class="wall"></div><div class="bgblob"></div><div class="scr">
+  <div class="top"><div class="seg g"><span class="on">Kafka</span><span>Zoe</span></div><div class="gear g">⚙︎</div></div>
+  <div class="hi">Buonasera</div><div class="sub">Kafka: prossima pastiglia alle 20:00 · 82 giorni senza crisi</div>
+  <div class="hero g"><div class="av"></div><div><b>Kafka</b><small>5 anni · Meticcio</small></div><div class="streak g"><b>82</b><small>giorni senza crisi</small></div></div>
+  <div class="sos">⚡ Crisi adesso</div>
+  <div class="tile g main"><small>Prossima pastiglia</small><div class="row"><b>20:00</b><span class="give">✓ Data</span></div><small>Vetbromide ¼ · 150 mg</small></div>
+  <div class="list g thick"><div class="li"><span class="chk ok"></span>08:00 Phenoleptil ½ · 50 mg</div><div class="li"><span class="chk ok"></span>16:00 Phenoleptil ½ · 50 mg</div><div class="li"><span class="chk"></span>20:00 Vetbromide ¼ · 150 mg</div></div>
+  </div><div class="tab g"><span class="on">Riepilogo</span><span>Diario</span><span>Statistiche</span><span>Vet</span></div><div class="fab g">+</div></div>`;
+document.getElementById('grid').innerHTML = OPTS.map(([c, t, d]) => `<div class="opt"><h2>${t}</h2><p>${d}</p>${phone(c)}</div>`).join('');
+</script>
+</body>
+</html>

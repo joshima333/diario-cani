@@ -799,7 +799,13 @@ $('#fDel').onclick = () => {
   toast('Voce eliminata', { label: 'Annulla', fn: () => { r.deleted = false; save(r); } });
 };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
-document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('click', e => { if (e.target === d) d.close(); });
+  d.addEventListener('close', () => { const c = d.querySelector('.card'); if (c) { c.style.transform = ''; c.style.transition = ''; } if (!document.querySelector('dialog[open]') && $('#toast').parentElement !== document.body) document.body.appendChild($('#toast')); });
+  // una ✕ sempre visibile in alto, oltre al trascinamento
+  const c = d.querySelector('.card'); if (c && !c.querySelector('.x-close')) c.insertAdjacentHTML('afterbegin', '<button type="button" class="x-close" aria-label="Chiudi">✕</button>');
+  c?.querySelector('.x-close').addEventListener('click', () => d.close());
+});
 
 // ---------- eventi ----------
 $('#fab').onclick = () => {
@@ -1398,8 +1404,7 @@ document.querySelectorAll('dialog.sheet').forEach(dl => {
   }, { passive: false });
   card.addEventListener('touchend', () => {
     if (y0 == null) return; y0 = null; card.style.transition = 'transform .25s ease';
-    if (dy > 110) { card.style.transform = 'translateY(100%)'; setTimeout(() => { dl.close(); card.style.transform = ''; card.style.transition = ''; }, 220); }
-    else card.style.transform = '';
+    if (dy > 110) dl.close(); else card.style.transform = '';
   });
 });
 
