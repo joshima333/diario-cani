@@ -490,8 +490,12 @@ const norm_ = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u03
 const textOf = r => norm_([KINDS[r.kind].name, titleOf(r), ...Object.values(r.data).flat()].join(' '));
 function viewDiario() {
   const kinds = kindsFor(curDog());
-  let h = `<div class="search glass"><span>🔍</span><input id="q" type="search" placeholder="Cerca (es. Ziepam, vomito, bava…)" value="${esc(query)}" autocomplete="off">${query ? '<button class="link" data-clearq>✕</button>' : ''}</div><div class="filters"><button class="pill ${!filter ? 'on' : ''}" data-filter="">Tutto</button>${kinds.map(([id, k]) => `<button class="pill ${filter === id ? 'on' : ''}" data-filter="${id}">${k.ic} ${k.name}</button>`).join('')}</div>`;
+  let h = `<div class="search glass"><span>🔍</span><input id="q" type="search" placeholder="Cerca (es. Ziepam, vomito, bava…)" value="${esc(query)}" autocomplete="off">${query ? '<button class="link" data-clearq>✕</button>' : ''}</div><div class="filters"><button class="pill ${!filter ? 'on' : ''}" data-filter="">Tutto</button>${kinds.map(([id, k]) => `<button class="pill ${filter === id ? 'on' : ''}" data-filter="${id}">${k.ic} ${k.name}</button>`).join('')}<button class="pill ${filter === 'trash' ? 'on' : ''}" data-filter="trash">🗑️ Eliminati</button></div>`;
   h = `<div class="seg3 dmode"><button class="${diaryMode === 'list' ? 'on' : ''}" data-dmode="list">☰ Elenco</button><button class="${diaryMode === 'month' ? 'on' : ''}" data-dmode="month">🗓️ Mese</button></div>` + h;
+  if (filter === 'trash') {
+    const del = Object.values(records).filter(r => r.deleted && r.dog === dog && KINDS[r.kind] && !['dose', 'dosemod', 'giorno'].includes(r.kind)).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    return h + `<p class="period">Voci eliminate di ${esc(curDog().name)}: tocca <b>Ripristina</b> per rimetterle.</p><div class="glass list">${del.length ? del.map(r => `<div class="item"><div class="sc"><div class="ic" style="--c:${COLORS[r.kind]}">${KINDS[r.kind].ic}</div><div class="tx"><b>${esc(titleOf(r))}</b><small>${esc(KINDS[r.kind].sum(r.data) || '')} · ${esc(fmtDate(r.data.date))}</small></div><button class="done-btn" data-restore="${r.id}">Ripristina</button></div></div>`).join('') : '<div class="empty">Nessuna voce eliminata</div>'}</div>`;
+  }
   const words = norm_(query).split(/\s+/).filter(Boolean);
   const rs = list(dog, filter || undefined).filter(r => !words.length || words.every(w => textOf(r).includes(w)));
   if (diaryMode === 'month') return h + monthHTML(list(dog, filter || undefined).filter(r => !words.length || words.every(w => textOf(r).includes(w))));
@@ -808,6 +812,7 @@ $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
   if (e.target.closest('[data-fold]') && !e.target.closest('button')) return;
+  const rs_ = e.target.closest('[data-restore]'); if (rs_) { const r = records[rs_.dataset.restore]; r.deleted = false; save(r); return toast('Ripristinato ✓'); }
   if (e.target.closest('[data-switch]')) return openSwitch();
   if (e.target.closest('[data-clearq]')) { query = ''; return render(); }
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
