@@ -35,6 +35,7 @@ const KINDS = {
       { k: 'farmaco', l: 'Farmaco', t: 'text', ph: 'es. Fenobarbital', list: 'farmaci' },
       { k: 'dose', l: 'Dose', t: 'text', ph: 'es. 30' },
       { k: 'unita', l: 'Unità', t: 'select', o: ['mg', 'ml', 'compresse', 'gocce', 'mg/kg'] },
+      { k: 'mgcpr', l: 'mg in una compressa (se non è nel nome)', t: 'num', step: '0.1' },
       { k: 'freq', l: 'Quante volte', t: 'select', o: ['1 volta al giorno', '2 volte al giorno', '3 volte al giorno', 'Al bisogno', 'Altro'] },
       { k: 'orari', l: 'Orari', t: 'text', ph: 'es. 08:00 e 20:00' },
       { k: 'fine', l: 'Fino al (compreso) — se è una cura a tempo', t: 'date' },
@@ -409,7 +410,7 @@ function therapyCards(d) {
   if (!th.length) return `<div class="glass list"><div class="empty">Nessuna terapia in corso<br><small>Aggiungila con il tasto +</small></div></div>`;
   return `<div class="drugs">${th.map(r => { const x = r.data; return `<div class="glass drug" data-id="${r.id}" style="--c:${COLORS.terapia}">
     <div class="drug-h"><span class="ic" style="--c:${COLORS.terapia}">💊</span><div><b>${esc(x.farmaco || 'Farmaco')}</b><small>dal ${esc(fmtDate(x.date))}</small></div></div>
-    <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}${x.fine ? `<span>fino al ${esc(fmtDate(x.fine))}</span>` : ''}</div>
+    <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${mgOfTherapy(d, x) ? `<span class="mg">= ${esc(mgOfTherapy(d, x))}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}${x.fine ? `<span>fino al ${esc(fmtDate(x.fine))}</span>` : ''}</div>
     ${nextChange(d, r) ? `<p class="next">↪ ${nextChange(d, r)}</p>` : ''}</div>`; }).join('')}</div>${readonly ? '' : '<button class="link swlink" data-switch>🔁 Cambia farmaco (stesso principio, altra marca o dose)</button>'}`;
 }
 function nextChange(d, cur) {
@@ -451,7 +452,7 @@ function homeTiles() {
   const withBtn = (html, s, day) => html.replace(/<\/div>$/, giveBtn(s, day) + '</div>');
   if (late.length) out.push(withBtn(tile('Da dare', `${late[0].t}`, esc(late[0].what), late.length > 1 ? `e altre ${late.length - 1}` : 'in ritardo', '', 'warn'), late[0], t));
   const nd = nextDose(dog);
-  if (nd) out.push(withBtn(tile('Prossima pastiglia', `${nd.tomorrow ? 'domani ' : ''}${nd.t}`, esc(nd.what), inTime(nd.mins)), nd, nd.day));
+  if (nd) out.push(withBtn(tile('Prossima pastiglia', `${nd.tomorrow ? 'domani ' : ''}${nd.t}`, esc(nd.what) + (mgOfSlot(dog, nd.what) ? ' · ' + mgOfSlot(dog, nd.what) : ''), inTime(nd.mins)), nd, nd.day));
   if (d.epi) {
     const m = seizureStats(dog, 1), m2 = seizureStats(dog, 2), q = seizureStats(dog, 3), diff = m.total - (m2.total - m.total);
     out.push(tile('Crisi questo mese', m.total, '', diff > 0 ? `<i class="up">▲ ${diff} sul mese scorso</i>` : diff < 0 ? `<i class="down">▼ ${-diff} sul mese scorso</i>` : 'come il mese scorso'));
@@ -612,9 +613,9 @@ function reportHTML() {
     h += `<section><h2>Sintesi crisi</h2>${vetSummary(st)}</section>`;
     h += `<section class="chart"><h2>Crisi per mese</h2>${seizureMonthChart(dog, st)}<p class="muted">Pallino rosa = cambio di terapia</p></section>`;
   }
-  h += `<section><h2>Terapia in corso</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
+  h += `<section><h2>Terapia in corso</h2>${table(currentTherapy(dog), [['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}${mgOfTherapy(dog, x) ? ' (' + mgOfTherapy(dog, x) + ')' : ''}`], ['Frequenza', x => x.freq], ['Orari', x => x.orari], ['Dal', x => fmtDate(x.date)]])}</section>`;
   if (d.epi) h += `<section><h2>Crisi con ogni terapia</h2>${table(therapyPeriods(dog).map(x => ({ data: x })), [['Periodo', x => `${fmtDate(x.from)} → ${x.to ? fmtDate(x.to) : 'oggi'}`], ['Terapia', x => x.label], ['Crisi', x => x.n], ['Al mese', x => fmtNum(x.rate)]])}</section>`;
-  h += `<section><h2>Storia della terapia</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Note', x => [x.motivo, x.note].filter(Boolean).join(' — ')]])}</section>`;
+  h += `<section><h2>Storia della terapia</h2>${table(list(dog, 'terapia'), [['Dal', x => fmtDate(x.date)], ['Farmaco', x => x.farmaco], ['Dose', x => `${x.dose || ''} ${x.unita || ''}${mgOfTherapy(dog, x) ? ' (' + mgOfTherapy(dog, x) + ')' : ''}`], ['Frequenza', x => x.freq], ['Stato', x => x.sospeso], ['Note', x => [x.motivo, x.note].filter(Boolean).join(' — ')]])}</section>`;
   if (d.epi) h += `<section><h2>Elenco crisi</h2>${table(inR(list(dog, 'crisi')), [['Giorno', x => fmtDate(x.date)], ['Ora', x => x.time], ['N.', x => x.quante || 1], ['Durata', x => fmtDur(x.durSec)], ['Intensità', x => x.intensita ? x.intensita + '/5' : ''], ['A terra', x => fmtDur(x.terraSec)], ['Vaga', x => fmtDur(x.vagaSec)], ['Ripresa', x => x.post ? x.post + ' min' : ''], ['Sintomi', x => arr(x.sintomi)], ['Farmaco emergenza', x => x.emergenza], ['Note', x => x.note]])}</section>`;
   h += `<section><h2>Analisi</h2>${table(inR(list(dog, 'analisi')), [['Giorno', x => fmtDate(x.date)], ['Tipo', x => x.tipo], ['Valore', x => x.valore], ['Esito', x => x.esito], ['Risultati', x => x.risultati]])}</section>`;
   h += `<section><h2>Problemi di salute</h2>${table(inR(list(dog, 'salute')), [['Giorno', x => fmtDate(x.date)], ['Cosa', x => x.titolo], ['Farmaco', x => x.farmaco], ['Stato', x => x.risolto], ['Note', x => x.note]])}</section>`;
@@ -972,7 +973,7 @@ function pillsCard() {
   return section('Pastiglie di oggi', `<div class="glass list pills">${sl.map(s => {
     const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, late = !r && s.t < now;
     return `<div class="pill-row${sk ? ' skip' : r ? ' ok' : late ? ' late' : ''}${s.c ? ' col' : ''}${s.mod ? ' mod' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-orig="${esc(s.orig || slotKey(s))}" data-day="${t}"><span class="chk">${sk ? '–' : r ? '✓' : ''}</span>
-      <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}</span><small>${sk ? 'non data' : r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`;
+      <span class="pt">${s.t}</span><span class="pw">${esc(s.what)}${mgOfSlot(dog, s.what) ? ` <i class="mgi">${mgOfSlot(dog, s.what)}</i>` : ''}</span><small>${sk ? 'non data' : r ? 'data alle ' + esc(r.data.time) : late ? 'da dare' : ''}</small>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`;
   }).join('')}</div><div class="pills-f"><button class="link" data-prog>Orari fissi</button><button class="link" data-ics="pills">📅 Promemoria nel Calendario</button></div>`, `<span class="count ok">${done}/${sl.length}</span>`) + agendaCard();
 }
 // calendario delle terapie a tempo: un giorno per riga, con le dosi da spuntare
@@ -990,7 +991,7 @@ function agendaCard() {
     const sl = slotsFor(dog, day), taken = dosesOn(dog, day), dt = toDate(day);
     return `<div class="ag-day${day === t ? ' today' : ''}${day < t ? ' past' : ''}"><div class="ag-d"><b>${dt.getDate()}</b><small>${dt.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}</small></div>
       <div class="ag-l">${sl.map(s => { const r = taken.find(x => x.data.slot === slotKey(s)), sk = r?.data.skip, ok = r && !sk, miss = !r && (day < t || (day === t && s.t < nowTime()));
-        return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}${s.c ? ' col' : ''}${s.mod ? ' mod' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-orig="${esc(s.orig || slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
+        return `<div class="ag-dose${sk ? ' skip' : ok ? ' ok' : miss ? ' miss' : ''}${s.c ? ' col' : ''}${s.mod ? ' mod' : ''}"${dc(s)} data-pill="${esc(slotKey(s))}" data-orig="${esc(s.orig || slotKey(s))}" data-day="${day}"><span>${sk ? '–' : ok ? '✓' : miss ? '!' : '○'}</span><em>${s.t} ${esc(s.what)}${mgOfSlot(dog, s.what) ? ` · ${mgOfSlot(dog, s.what)}` : ''}</em>${r ? '' : `<button class="skipb" data-skip title="Non va data / saltata">✕</button>`}</div>`; }).join('') || '<small class="muted">—</small>'}</div></div>`;
   }).join('')}</div><div class="legend phase">${leg}</div><p class="hint small">Tieni premuta una dose per cambiarne orario o quantità solo per quel giorno</p>`, `<span class="count">fino al ${esc(fmtDate(rg.to).replace(/ \d{4}$/, ""))}</span>`);
 }
 function skipPill(key, day = today()) {
@@ -1570,6 +1571,27 @@ view.addEventListener('click', e => {
   const dm = e.target.closest('[data-dmode]'); if (dm) { e.stopImmediatePropagation(); diaryMode = dm.dataset.dmode; LS.set('cani.diaryMode', diaryMode); return render(); }
   const bar = e.target.closest('svg rect'); if (bar && bar.querySelector('title')) { e.stopImmediatePropagation(); bar.classList.remove('hit'); void bar.getBBox(); bar.classList.add('hit'); return toast(bar.querySelector('title').textContent); }
 }, true);
+
+// ---------- milligrammi per dose ----------
+// mg di una compressa: dal campo apposito o dal nome (es. "Vetbromide 600 mg")
+function mgPerTab(d, key) {
+  for (const r of list(d, 'terapia')) if (drugKey(r.data.farmaco) === key) { if (+r.data.mgcpr) return +r.data.mgcpr; const m = String(r.data.farmaco).match(/(\d+(?:[.,]\d+)?)\s*mg\b/i); if (m) return +m[1].replace(',', '.'); }
+  return null;
+}
+const mgFmt = v => `${fmtNum(Math.round(v * 10) / 10)} mg`;
+// "Phenoleptil 1/2" o "Vetbromide 600 mg 1/4 cpr" → mg di quella dose
+function mgOfSlot(d, what) {
+  const key = drugKey(what), per = mgPerTab(d, key); if (!per) return '';
+  const rest = what.replace(/\d+(?:[.,]\d+)?\s*mg\b/i, '').slice(what.split(/\s/)[0].length).trim(), q = fracOf(rest.replace(/^[^\d]*/, ''));
+  return q ? mgFmt(q * per) : '';
+}
+function mgOfTherapy(d, x) {
+  if (!x.dose) return '';
+  if (x.unita === 'mg') return '';
+  const per = +x.mgcpr || mgPerTab(d, drugKey(x.farmaco)); const q = fracOf(x.dose); if (!per || !q || (x.unita && x.unita !== 'compresse')) return '';
+  const n = timesIn(x.orari).length || parseInt(x.freq) || 1;
+  return `${mgFmt(q * per)} a dose${n > 1 ? ` · ${mgFmt(q * per * n)} al giorno` : ''}`;
+}
 
 // ---------- cambio farmaco (es. Libromide → Vetbromide) ----------
 // sospende il vecchio, inizia il nuovo con dose e orari, aggiorna gli orari fissi e le spunte già date da quel giorno

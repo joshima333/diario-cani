@@ -530,3 +530,5 @@ input.filled,textarea.filled{border-color:var(--ok);box-shadow:0 0 0 3px color-m
 .ans small{display:block;color:var(--muted);font-size:.78rem}.ans b{font-size:1.15rem}
 .swlink{display:block;margin:10px 4px 0;font-size:.88rem}
 .kv.trash{align-items:center;gap:10px}.kv.trash span{color:var(--text)}
+.chips2 span.mg{background:color-mix(in srgb,var(--accent) 18%,var(--glass2));border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.mgi{font-style:normal;font-size:.8rem;color:var(--accent);font-weight:700;white-space:nowrap}
