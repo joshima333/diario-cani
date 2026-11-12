@@ -94,7 +94,6 @@ const KINDS = {
     ic: '🐾', name: 'Profilo', hidden: true,
     fields: [
       { k: 'foto', l: 'Foto', t: 'photo' },
-      { k: 'sfondo', l: 'Foto dietro al pannello (orizzontale)', t: 'wall' },
       { k: 'nascita', l: 'Data di nascita', t: 'date' },
       { k: 'razza', l: 'Razza', t: 'text' },
       { k: 'sesso', l: 'Sesso', t: 'select', o: ['Femmina', 'Maschio'] },
@@ -427,8 +426,8 @@ function heroCard() {
     const n = st.last ? Math.max(0, daysBetween(toDate(st.last.data.date), new Date())) : null;
     right = `<div class="streak"><b>${n ?? '—'}</b><small>${n === 1 ? 'giorno' : 'giorni'} senza crisi</small></div>`;
   }
-  const bgp = p.sfondo || p.foto;
-  return `<div class="glass hero${p.sfondo ? ' has-wall' : ''}" data-profile${bgp ? ` style="--photo:url('${esc(bgp)}')"` : ''}>
+  const bgp = p.foto;
+  return `<div class="glass hero" data-profile${bgp ? ` style="--photo:url('${esc(bgp)}')"` : ''}>
     ${avatar(dog, 72)}
     <div class="hero-tx"><h2>${esc(d.name)}</h2><p>${esc(ageOf(dog))}</p><small>${esc(bits) || 'Tocca per completare il profilo ›'}</small></div>${right}</div>`;
 }
@@ -1201,8 +1200,7 @@ function settingsHTML() {
     <button class="btn" data-set="join">Entra</button></div>`;
   const th = LS.get('cani.theme', 'auto');
   h += `<div class="set-sec"><h3>🎨 Aspetto</h3><div class="seg3">${[['auto', 'Automatico'], ['light', 'Chiaro'], ['dark', 'Scuro']].map(([v, l]) => `<button class="${th === v ? 'on' : ''}" data-set="theme:${v}">${l}</button>`).join('')}</div>
-    <div class="seg3" style="margin-top:8px">${[['cane', 'Vetro scuro'], ['glass', 'Bianco e nero'], ['color', 'Colorato']].map(([v, l]) => `<button class="${LS.get('cani.style', 'cane') === v ? 'on' : ''}" data-set="style:${v}">${l}</button>`).join('')}</div>
-    <button class="btn" data-set="wallpaper">🖼️ Foto dietro al pannello di ${esc(curDog().name)}</button></div>`;
+    <div class="seg3" style="margin-top:8px">${[['cane', 'Vetro scuro'], ['glass', 'Bianco e nero'], ['color', 'Colorato']].map(([v, l]) => `<button class="${LS.get('cani.style', 'cane') === v ? 'on' : ''}" data-set="style:${v}">${l}</button>`).join('')}</div></div>`;
   h += trashHTML();
   h += `<div class="set-sec"><h3>💾 Dati</h3><p class="small muted">Il backup salva tutto in un file. Con Importa puoi ricaricarlo o aggiungere voci.</p>
     <div class="row"><button class="btn" data-set="backup">Backup</button><button class="btn" data-set="import">Importa</button></div></div>

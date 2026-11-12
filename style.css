@@ -599,7 +599,7 @@ dialog.sheet h2{padding-right:44px}
 /* ===================== Stile "Vetro scuro" (predefinito) =====================
    scuro e leggibile, accento dal pelo del cane (rame Kafka, miele Zoe),
    vetro "liquido": bordo con riflesso, luce speculare in alto, ombra interna in basso. */
-html[data-style="cane"]{--text:#f4f2ef;--muted:#a5a09a;--bg:#0b0a0a;--line:rgba(255,255,255,.08);
+:root[data-style="cane"][data-theme],html[data-style="cane"]{--text:#f4f2ef;--muted:#a5a09a;--bg:#0b0a0a;--line:rgba(255,255,255,.08);
   --glass:rgba(255,255,255,.065);--glass2:rgba(255,255,255,.11);--edge:rgba(255,255,255,.14);--shadow:0 14px 36px rgba(0,0,0,.55)}
 html[data-style="cane"] body{--acc:#d4895a;--acc2:#f0b48a;--accent:var(--acc);--accent2:var(--acc2);--dog:var(--acc);--dog2:var(--acc2)}
 html[data-style="cane"] body.zoe{--acc:#e2b35e;--acc2:#f5d699}
@@ -609,20 +609,14 @@ html[data-style="cane"] .bg i:nth-child(1){background:var(--acc)}
 html[data-style="cane"] .bg i:nth-child(2){background:#2a2522;opacity:.3}
 html[data-style="cane"] .bg i:nth-child(3){background:var(--acc2);opacity:.08}
 /* il vetro liquido */
-html[data-style="cane"] .glass{position:relative;border:0;
   background:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.04) 45%,rgba(255,255,255,.06));
   -webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(255,255,255,.04),inset 0 -1px 0 rgba(0,0,0,.45),inset 0 0 24px rgba(255,255,255,.035),0 14px 36px rgba(0,0,0,.5)}
-html[data-style="cane"] .tabbar.glass{position:fixed}
-html[data-style="cane"] .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
-  background:linear-gradient(150deg,rgba(255,255,255,.55),rgba(255,255,255,.08) 30%,rgba(255,255,255,0) 55%,color-mix(in srgb,var(--acc) 45%,transparent) 85%,rgba(255,255,255,.18));
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
 /* elementi "di comando" (barra, selettore, +): vetro più chiaro e lente sui bordi dove supportata */
 html[data-style="cane"] .tabbar,html[data-style="cane"] .seg,html[data-style="cane"] .gear,html[data-style="cane"] .fab{
   background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
-  -webkit-backdrop-filter:blur(14px) saturate(200%) brightness(1.1);backdrop-filter:url(#lens) blur(14px) saturate(200%) brightness(1.1);
+  -webkit-backdrop-filter:blur(14px) saturate(200%) brightness(1.1);backdrop-filter:blur(14px) saturate(200%) brightness(1.1);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.35),inset 0 0 14px rgba(255,255,255,.06),0 10px 30px rgba(0,0,0,.55);border:0}
-html[data-style="cane"] .seg{position:relative}
 html[data-style="cane"] .seg button.on{background:color-mix(in srgb,var(--acc) 30%,rgba(255,255,255,.08));color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
 html[data-style="cane"] .fab{color:#fff;background:linear-gradient(160deg,color-mix(in srgb,var(--acc) 85%,#fff 10%),var(--acc));box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -2px 6px rgba(0,0,0,.25),0 12px 30px color-mix(in srgb,var(--acc) 40%,transparent)}
 html[data-style="cane"] .tabbar button.on{color:var(--acc);background:rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
@@ -634,18 +628,6 @@ html[data-style="cane"] .btn.primary,html[data-style="cane"] .seg3 button.on,htm
 html[data-style="cane"] .link{color:var(--acc2)}
 html[data-style="cane"] .sec-ic{background:color-mix(in srgb,var(--acc) 18%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 35%,transparent)}
 /* pannello del cane: la sua foto dietro, il testo su vetro scuro a sinistra */
-html[data-style="cane"] .hero{min-height:150px;align-items:flex-end;background:#151312}
-html[data-style="cane"] .hero::before{inset:0;filter:none;opacity:1;z-index:0;background:var(--photo) right center/cover}
-html[data-style="cane"] .hero:not(.has-wall)::before{background:var(--photo) center/cover;filter:blur(24px) saturate(1.3);inset:-30px;opacity:.55}
-html[data-style="cane"] .hero>*{z-index:1}
-html[data-style="cane"] .hero>.av,html[data-style="cane"] .hero>.hero-tx,html[data-style="cane"] .hero>.streak{position:relative}
-html[data-style="cane"] .hero .hero-tx{padding:10px 12px;margin:-4px 0;border-radius:18px;background:rgba(12,11,10,.55);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18);flex:0 1 auto}
-html[data-style="cane"] .hero h2,html[data-style="cane"] .hero p{color:#fff;text-shadow:none}
-html[data-style="cane"] .hero small{color:rgba(255,255,255,.8)}
-html[data-style="cane"] .hero.has-wall .av{display:none}
-html[data-style="cane"] .streak{margin-left:auto;background:rgba(12,11,10,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
-html[data-style="cane"] .streak b{color:var(--acc2);background:none}
-html[data-style="cane"] .av{background:linear-gradient(135deg,var(--acc),#3a2a20)}
 /* riquadro principale con l'accento del cane */
 html[data-style="cane"] .tile.prime{background:linear-gradient(150deg,color-mix(in srgb,var(--acc) 92%,#fff 8%),color-mix(in srgb,var(--acc) 75%,#000));color:#fff;box-shadow:inset 0 1.5px 0 rgba(255,255,255,.45),inset 0 -2px 8px rgba(0,0,0,.25),0 16px 36px color-mix(in srgb,var(--acc) 30%,transparent)}
 html[data-style="cane"] .tile.prime small,html[data-style="cane"] .tile.prime span,html[data-style="cane"] .tile.prime em{color:rgba(255,255,255,.88)}
@@ -655,4 +637,8 @@ html[data-style="cane"] .cal-d.sel,html[data-style="cane"] .ag-day.today .ag-d{b
 html[data-style="cane"] .cal-d.sel b{color:#140c06}
 html[data-style="cane"] .mic{background:var(--acc);color:#140c06}
 html[data-style="cane"] #splash{background:var(--bg)}
-.wall-pick{display:grid;place-items:center;height:130px;border-radius:18px;border:2px dashed var(--line);background:var(--glass2) center/cover;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;color:var(--text)}
+
+/* pannello del cane: stessa impaginazione di prima, solo i colori del tema scuro */
+html[data-style="cane"] .hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 40%,#141210),#141210);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 14px 36px rgba(0,0,0,.5)}
+html[data-style="cane"] .streak{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18)}
+html[data-style="cane"] .streak b{color:#fff;background:none}
