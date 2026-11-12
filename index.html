@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=1792065761">
+<link rel="stylesheet" href="style.css?v=1794504503">
 </head>
 <body>
 <div class="bg"><i></i><i></i><i></i></div>
@@ -34,7 +34,7 @@
 <main id="app" hidden>
   <header class="top">
     <div class="seg" id="dogSeg"></div>
-    <div class="top-r"><span id="sync" class="sync" title="Sincronizzazione"></span><button id="gear" class="gear" aria-label="Impostazioni">⚙️</button></div>
+    <div class="top-r"><span id="sync" class="sync" title="Sincronizzazione"></span><button id="searchBtn" class="gear" aria-label="Cerca">🔍</button><button id="gear" class="gear" aria-label="Impostazioni">⚙️</button></div>
   </header>
   <h1 class="large" id="title"></h1>
   <p id="subtitle" class="subtitle"></p>
@@ -96,6 +96,24 @@
   </div>
 </dialog>
 
+<!-- Ricerca ovunque -->
+<dialog id="gsearch" class="sheet">
+  <div class="glass card">
+    <div class="gs-bar"><input id="gq" type="search" placeholder="Cerca: peso Kafka, Vetbromide…" autocomplete="off"><button type="button" id="gMic" class="mic sm" aria-label="Cerca a voce">🎙️</button></div>
+    <div id="gRes"></div>
+    <button class="btn" data-close>Chiudi</button>
+  </div>
+</dialog>
+
+<!-- Cambio farmaco -->
+<dialog id="switchDrug" class="sheet">
+  <div class="glass card">
+    <h2>🔁 Cambia farmaco</h2>
+    <div id="swBody"></div>
+    <div class="row" style="margin-top:16px"><button type="button" class="btn" data-close>Annulla</button><button type="button" class="btn primary" id="swSave">Conferma</button></div>
+  </div>
+</dialog>
+
 <!-- Impostazioni -->
 <dialog id="settings" class="sheet">
   <div class="glass card">
@@ -112,7 +130,7 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=1792065761"></script>
-<script src="voice.js?v=1792065761"></script>
+<script src="app.js?v=1794504503"></script>
+<script src="voice.js?v=1794504503"></script>
 </body>
 </html>

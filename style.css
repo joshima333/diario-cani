@@ -521,3 +521,11 @@ h1.large{font-size:2rem}
 .scan-btn{display:block;margin:0 0 6px;text-transform:none;letter-spacing:0;font-size:1rem;color:#fff}
 .scan p{margin:6px 0 0}
 input.filled,textarea.filled{border-color:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent)}
+.top-r{gap:8px}
+.gs-bar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.gs-bar input{flex:1;font-size:1.05rem}
+.mic.sm{width:48px;height:48px;font-size:1.3rem}
+.answers{display:grid;gap:8px;margin-bottom:6px}
+.ans{display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer}
+.ans small{display:block;color:var(--muted);font-size:.78rem}.ans b{font-size:1.15rem}
+.swlink{display:block;margin:10px 4px 0;font-size:.88rem}

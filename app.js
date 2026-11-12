@@ -410,7 +410,7 @@ function therapyCards(d) {
   return `<div class="drugs">${th.map(r => { const x = r.data; return `<div class="glass drug" data-id="${r.id}" style="--c:${COLORS.terapia}">
     <div class="drug-h"><span class="ic" style="--c:${COLORS.terapia}">💊</span><div><b>${esc(x.farmaco || 'Farmaco')}</b><small>dal ${esc(fmtDate(x.date))}</small></div></div>
     <div class="chips2">${x.dose ? `<span>${esc(x.dose)} ${esc(x.unita || '')}</span>` : ''}${x.freq ? `<span>${esc(x.freq)}</span>` : ''}${x.orari ? `<span>🕒 ${esc(x.orari)}</span>` : ''}${x.fine ? `<span>fino al ${esc(fmtDate(x.fine))}</span>` : ''}</div>
-    ${nextChange(d, r) ? `<p class="next">↪ ${nextChange(d, r)}</p>` : ''}</div>`; }).join('')}</div>`;
+    ${nextChange(d, r) ? `<p class="next">↪ ${nextChange(d, r)}</p>` : ''}</div>`; }).join('')}</div>${readonly ? '' : '<button class="link swlink" data-switch>🔁 Cambia farmaco (stesso principio, altra marca o dose)</button>'}`;
 }
 function nextChange(d, cur) {
   const k = drugKey(cur.data.farmaco), n = list(d, 'terapia').filter(r => drugKey(r.data.farmaco) === k && r.data.date > today()).pop();
@@ -808,6 +808,7 @@ $('#tabbar').addEventListener('click', e => { const b = e.target.closest('[data-
 view.addEventListener('click', e => {
   if (Date.now() - justSwiped < 400) return;
   if (e.target.closest('[data-fold]') && !e.target.closest('button')) return;
+  if (e.target.closest('[data-switch]')) return openSwitch();
   if (e.target.closest('[data-clearq]')) { query = ''; return render(); }
   const lv = e.target.closest('[data-live]'); if (lv) return liveAction(lv.dataset.live);
   const pl = e.target.closest('[data-pill]'); if (pl) return e.target.closest('[data-skip]') ? skipPill(pl.dataset.pill, pl.dataset.day) : togglePill(pl.dataset.pill, pl.dataset.day);
@@ -1556,6 +1557,95 @@ view.addEventListener('click', e => {
   const dm = e.target.closest('[data-dmode]'); if (dm) { e.stopImmediatePropagation(); diaryMode = dm.dataset.dmode; LS.set('cani.diaryMode', diaryMode); return render(); }
   const bar = e.target.closest('svg rect'); if (bar && bar.querySelector('title')) { e.stopImmediatePropagation(); bar.classList.remove('hit'); void bar.getBBox(); bar.classList.add('hit'); return toast(bar.querySelector('title').textContent); }
 }, true);
+
+// ---------- cambio farmaco (es. Libromide → Vetbromide) ----------
+// sospende il vecchio, inizia il nuovo con dose e orari, aggiorna gli orari fissi e le spunte già date da quel giorno
+function drugsToSwitch(d) {
+  const names = currentTherapy(d).map(r => r.data.farmaco);
+  programSlots(d).forEach(s => names.push(s.what.split(/\s+\d|\s+\d?\//)[0].trim()));
+  const seen = {}; return names.filter(n => n && !seen[drugKey(n)] && (seen[drugKey(n)] = 1));
+}
+function openSwitch(prefill = {}) {
+  const ds = drugsToSwitch(dog);
+  $('#swBody').innerHTML = `<label>Farmaco da sostituire</label><select id="swOld">${ds.map(n => `<option${prefill.old && drugKey(n) === drugKey(prefill.old) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
+    <label>Nuovo farmaco</label><input id="swNew" value="${esc(prefill.nuovo || '')}" placeholder="es. Vetbromide 600 mg" list="dl-farmaci">
+    <div class="two"><div><label>Dose ogni volta</label><input id="swDose" value="${esc(prefill.dose || '')}" placeholder="es. 1/4"></div><div><label>Unità</label><select id="swUnit">${['compresse', 'mg', 'ml', 'gocce'].map(u => `<option>${u}</option>`).join('')}</select></div></div>
+    <label>Orari (tutti quelli del giorno)</label><input id="swTimes" value="${esc(prefill.orari || '')}" placeholder="es. 08:00 e 20:00">
+    <label>Dal giorno</label><input id="swFrom" type="date" value="${esc(prefill.dal || today())}">
+    <p class="small muted">Sospendo il farmaco vecchio, aggiungo il nuovo con questi orari e, dal giorno indicato, le pastiglie già spuntate passano al nuovo farmaco.</p>`;
+  const fill = () => { const old = $('#swOld').value, k = drugKey(old), ts = programSlots(dog).filter(s => drugKey(s.what) === k).map(s => s.t); const th = currentTherapy(dog).find(r => drugKey(r.data.farmaco) === k); const t2 = ts.length ? ts : timesIn(th?.data.orari); if (!prefill.orari) $('#swTimes').value = (t2.length === 1 ? [t2[0] < '12:00' ? t2[0] : '08:00', t2[0] < '12:00' ? '20:00' : t2[0]] : t2).join(' e '); };
+  $('#swOld').onchange = fill; if (ds.length) fill();
+  $('#switchDrug').showModal();
+}
+$('#swSave').onclick = () => {
+  const old = $('#swOld').value, nuovo = $('#swNew').value.trim(), dose = $('#swDose').value.trim(), unita = $('#swUnit').value, from = $('#swFrom').value, times = timesIn($('#swTimes').value);
+  if (!old || !nuovo || !dose || !times.length || !from) return toast('Compila farmaco nuovo, dose, orari e giorno');
+  const k = drugKey(old), x = { farmaco: nuovo, dose, unita };
+  save({ id: uuid(), dog, kind: 'terapia', data: { date: from, farmaco: old, sospeso: 'Sospeso', motivo: `Sostituito da ${nuovo}` } });
+  save({ id: uuid(), dog, kind: 'terapia', data: { date: from, farmaco: nuovo, dose, unita, freq: times.length === 1 ? '1 volta al giorno' : times.length === 2 ? '2 volte al giorno' : times.length === 3 ? '3 volte al giorno' : 'Altro', orari: times.join(' e '), sospeso: 'In corso', motivo: `Al posto di ${old}` } });
+  const pr = records[progId(dog)];
+  if (pr && !pr.deleted) { const lines = (pr.data.slots || '').split('\n').filter(l => !l.toLowerCase().includes(k)); save({ ...pr, data: { ...pr.data, slots: lines.join('\n') } }); }
+  const mins = hm => +hm.slice(0, 2) * 60 + +hm.slice(3);
+  let n = 0;
+  for (const r of list(dog, 'dose').filter(r => r.data.date >= from && r.data.slot.toLowerCase().includes(k))) {
+    const t0 = r.data.slot.slice(0, 5), t = times.reduce((a, b) => Math.abs(mins(b) - mins(t0)) < Math.abs(mins(a) - mins(t0)) ? b : a);
+    save({ ...r, data: { ...r.data, slot: `${t} ${doseLabel(x)}` } }); n++;
+  }
+  $('#switchDrug').close(); toast(`Fatto: ${nuovo} dal ${fmtDate(from)}${n ? ` · ${n} spunte aggiornate` : ''}`);
+};
+
+// ---------- ricerca ovunque (anche a voce) ----------
+const SYN = { pesa: 'peso', chili: 'peso', kg: 'peso', chilo: 'peso', pesare: 'peso', pastiglie: 'terapia', pastiglia: 'terapia', medicine: 'terapia', farmaci: 'terapia', farmaco: 'terapia', vaccini: 'vaccino', vaccinazione: 'vaccino', attacchi: 'crisi', attacco: 'crisi', convulsioni: 'crisi', chip: 'microchip', nata: 'nascita', compleanno: 'nascita', eta: 'nascita', spese: 'costo', spesa: 'costo', soldi: 'costo', prezzo: 'costo', ricette: 'ricetta', esami: 'analisi', visite: 'visita', veterinario: 'visita' };
+const STOP = new Set(['di', 'del', 'della', 'dei', 'il', 'la', 'lo', 'le', 'i', 'gli', 'un', 'una', 'cane', 'cani', 'quanto', 'quando', 'quale', 'qual', 'e', 'ha', 'è', 'per', 'con', 'a', 'al', 'alla', 'in', 'che', 'cosa', 'mostra', 'cerca', 'trova', 'dimmi', 'ultimo', 'ultima']);
+function fullText(r) {
+  const k = KINDS[r.kind], d = r.data, labels = (k.fields || []).filter(f => d[f.k] != null && d[f.k] !== '' || (f.t === 'dur' && d[f.store || 'durSec'])).map(f => f.l);
+  return norm_([DOGS.find(x => x.id === r.dog)?.name, k.name, titleOf(r), ...labels, ...Object.entries(d).filter(([key]) => !['foto', 'docs', 'timeline'].includes(key)).map(([, v]) => v).flat()].join(' '));
+}
+// una parola trova le parole che iniziano così ("peso" non trova "sospeso")
+const hasWord = (hay, w) => (' ' + hay.replace(/[^a-z0-9àèéìòù/.,]+/g, ' ')).includes(' ' + w);
+function searchAll(q) {
+  let words = norm_(q).replace(/[?!.,]/g, ' ').split(/\s+/).filter(w => w && !STOP.has(w)).map(w => SYN[w] || w);
+  const dogs = DOGS.filter(d => words.includes(norm_(d.name))).map(d => d.id), scope = dogs.length ? dogs : DOGS.map(d => d.id);
+  words = words.filter(w => !DOGS.some(d => norm_(d.name) === w));
+  if (!words.length && !dogs.length) return { answers: [], rs: [] };
+  const answers = [];
+  for (const id of scope) {
+    const p = profile(id), name = DOGS.find(x => x.id === id).name;
+    for (const f of KINDS.profilo.fields) { if (f.t === 'photo' || !p[f.k]) continue; const hay = norm_(f.l + ' ' + f.k + ' ' + p[f.k]);
+      if (words.length && words.every(w => hasWord(hay, w))) answers.push({ dog: id, l: `${name} · ${f.l}`, v: f.t === 'date' ? fmtDate(p[f.k]) + (f.k === 'nascita' ? ` (${ageOf(id)})` : '') : f.k === 'peso' ? fmtNum(+p[f.k]) + ' kg' : p[f.k] }); }
+    if (words.includes('peso')) { const v = list(id, 'visita').find(r => r.data.peso); if (v) answers.push({ dog: id, l: `${name} · ultimo peso misurato`, v: `${fmtNum(+v.data.peso)} kg · ${fmtDate(v.data.date)}`, id: v.id }); }
+    if (words.includes('terapia') && words.length === 1) currentTherapy(id).forEach(r => answers.push({ dog: id, l: `${name} · in corso`, v: doseLabel(r.data) + (r.data.orari ? ' · ' + r.data.orari : ''), id: r.id }));
+  }
+  const rs = Object.values(records).filter(r => !r.deleted && scope.includes(r.dog) && KINDS[r.kind] && !['dose', 'dosemod', 'giorno', 'programma', 'profilo'].includes(r.kind) && words.every(w => hasWord(fullText(r), w)))
+    .sort((a, b) => (b.data.date || '').localeCompare(a.data.date || '')).slice(0, 60);
+  return { answers, rs };
+}
+function showSearch() {
+  const q = $('#gq').value, { answers, rs } = searchAll(q), box = $('#gRes');
+  if (!q.trim()) { box.innerHTML = '<p class="small muted">Prova: "peso Kafka", "Vetbromide", "microchip Zoe", "Ziepam", "vaccino leishmania", "spese".</p>'; return; }
+  box.innerHTML = (answers.length ? `<div class="answers">${answers.map(a => `<div class="glass ans"${a.id ? ` data-gid="${a.id}"` : ''}>${avatar(a.dog, 30)}<div><small>${esc(a.l)}</small><b>${esc(String(a.v))}</b></div></div>`).join('')}</div>` : '')
+    + (rs.length ? `<h3 class="sub">${plural(rs.length, 'voce trovata', 'voci trovate')}</h3><div class="glass list">${rs.map(r => itemHTML(r, { swipe: false }).replace('<div class="sc">', `<div class="sc">${avatar(r.dog, 22)}`).replace('class="item', `data-gid="${r.id}" class="item`)).join('')}</div>`
+    : answers.length ? '' : '<p class="small muted">Nessun risultato. Prova con un\'altra parola.</p>');
+}
+$('#searchBtn').onclick = () => { $('#gq').value = ''; showSearch(); $('#gsearch').showModal(); setTimeout(() => $('#gq').focus(), 300); };
+$('#gq').addEventListener('input', showSearch);
+$('#gRes').addEventListener('click', e => {
+  const g = e.target.closest('[data-gid]'); if (!g) return;
+  const r = records[g.dataset.gid]; if (!r) return;
+  $('#gsearch').close(); dog = r.dog; LS.set('cani.dog', dog); render(); openForm(r.kind, r);
+});
+let gRec = null;
+$('#gMic').onclick = () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return toast('Usa il microfono della tastiera 🎙️');
+  if (gRec) { gRec.stop(); return; }
+  gRec = new SR(); gRec.lang = 'it-IT'; gRec.interimResults = true;
+  $('#gMic').classList.add('on');
+  gRec.onresult = e => { $('#gq').value = [...e.results].map(x => x[0].transcript).join(' '); showSearch(); };
+  gRec.onend = () => { gRec = null; $('#gMic').classList.remove('on'); };
+  gRec.onerror = e => { if (/not-allowed/.test(e.error)) toast('Consenti il microfono'); };
+  try { gRec.start(); } catch { gRec = null; $('#gMic').classList.remove('on'); }
+};
 
 // ---------- accesso ----------
 async function findOwner() {
