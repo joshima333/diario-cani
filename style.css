@@ -657,3 +657,6 @@ html:not([data-style="cane"]) #view .glass{background-color:color-mix(in srgb,va
 .bg{background:radial-gradient(120% 60% at 0% 0%,color-mix(in srgb,var(--dog,#8b7bff) 22%,transparent),transparent 60%),radial-gradient(100% 50% at 100% 100%,color-mix(in srgb,var(--dog2,#ff7eb3) 14%,transparent),transparent 60%)}
 html[data-style="cane"] .bg{background:radial-gradient(120% 55% at 0% 0%,color-mix(in srgb,var(--acc) 16%,transparent),transparent 60%),radial-gradient(90% 45% at 100% 100%,color-mix(in srgb,var(--acc2) 8%,transparent),transparent 60%)}
 body.scrolled .top{-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.todo-chk{width:26px;height:26px;flex:none;border-radius:50%;border:2px solid var(--muted);background:none;padding:0}
+.todo-chk:active{background:var(--ok);border-color:var(--ok)}
+.tx b.wrap{white-space:normal;display:block;font-weight:600;line-height:1.35}

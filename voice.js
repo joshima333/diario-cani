@@ -101,6 +101,13 @@ const Voice = (() => {
     const date = pastDate(t), time = timeOf(t);
     const add = (kind, data) => out.push({ id: uuid(), dog: dogId, kind, data: Object.fromEntries(Object.entries({ date, ...data }).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length))) });
 
+    // "ricordami di…", "devo…", "promemoria…": è una cosa da fare
+    if (/^\s*(ricorda(mi|rmi)?|devo|promemoria|nota|da fare|non dimenticare)\b/.test(t.trim())) {
+      const both = /entramb|tutti e due|tutte e due/.test(t);
+      const entro = /entro|prima del|per (il|lunedi|martedi|mercoledi|giovedi|venerdi|sabato|domenica|domani)|domani|settimana prossima/.test(t) ? futureDate(t.replace(/.*?(entro|prima del|per)\s/, '')) : null;
+      out.push({ id: uuid(), dog: dogId, kind: 'nota', data: Object.fromEntries(Object.entries({ date: today(), testo: cap(text.replace(/^\s*(ricordami di|ricordarmi di|ricorda di|promemoria:?|nota:?|devo)\s*/i, '')), entro, stato: 'Da fare', cani: both ? 'entrambi' : undefined }).filter(([, x]) => x != null && x !== '')) });
+      return out;
+    }
     const isCrisi = /\bcrisi\b|attacc|convuls|epilett/.test(t) && !/analisi|esami/.test(t.match(/[^.]*(crisi|attacc)[^.]*/)?.[0] || '');
     const isVisita = /visita|veterinari|dottor|controllo/.test(t);
     const drugs = knownDrugs();

@@ -147,6 +147,16 @@ const KINDS = {
     title: d => d.cosa || d.categoria || 'Spesa',
     sum: d => [d.costo != null && euro(d.costo), d.categoria, d.cani === 'entrambi' && '🐾 entrambi'].filter(Boolean).join(' · '),
   },
+  nota: {
+    ic: '📌', name: 'Da fare / nota', nodate: true,
+    fields: [
+      { k: 'testo', l: 'Cosa devo ricordarmi', t: 'area', ph: 'es. Prenotare la visita di Zoe e chiedere la ricetta del NexGard Spectra per tutti e due' },
+      { k: 'entro', l: 'Entro il (facoltativo)', t: 'date' },
+      { k: 'stato', l: 'Stato', t: 'select', o: ['Da fare', 'Fatto'], def: 'Da fare' },
+    ],
+    title: d => (d.testo || 'Nota').split('\n')[0].slice(0, 70),
+    sum: d => d.stato === 'Fatto' ? 'Fatto ✓' : d.entro ? 'entro ' + fmtDate(d.entro) : 'da fare',
+  },
   ricorrenza: {
     ic: '🔁', name: 'Promemoria ricorrente', nodate: true,
     fields: [
@@ -261,7 +271,7 @@ const list = (dog, kind) => Object.values(records)
 let dog = LS.get('cani.dog', 'kafka'), tab = 'home', filter = '', range = 6;
 const curDog = () => DOGS.find(d => d.id === dog);
 const kindsFor = d => Object.entries(KINDS).filter(([, k]) => !k.hidden && (!k.only || d[k.only]));
-const COLORS = { ricetta: '#ec4899', crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa', spesa: '#f5b400', scorta: '#22c3c3', ricorrenza: '#2fc28b', giorno: '#a78bfa', dose: '#22c27a', dosemod: '#8b7bff', programma: '#8b7bff' };
+const COLORS = { nota: '#38bdf8', ricetta: '#ec4899', crisi: '#ff5f7e', terapia: '#8b7bff', analisi: '#ff8a5c', vaccino: '#2fc28b', salute: '#ffb340', visita: '#3ea6ff', profilo: '#a78bfa', spesa: '#f5b400', scorta: '#22c3c3', ricorrenza: '#2fc28b', giorno: '#a78bfa', dose: '#22c27a', dosemod: '#8b7bff', programma: '#8b7bff' };
 const profileId = d => '00000000-0000-4000-8000-' + (d === 'kafka' ? '00000000000a' : '00000000000b');
 const profile = d => records[profileId(d)]?.data || {};
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -288,7 +298,7 @@ function currentTherapy(d) {
 }
 function upcoming(d) {
   const t = today(), out = [], seen = {};
-  for (const r of list(d)) { if (r.kind === 'ricorrenza') continue; if (r.kind === 'ricetta') { if (r.data.stato !== 'Comprata' && r.data.stato !== 'Non serve più' && r.data.scadenza) out.push({ r, due: r.data.scadenza }); continue; }
+  for (const r of list(d)) { if (r.kind === 'ricorrenza') continue; if (r.kind === 'nota') { if (r.data.stato !== 'Fatto' && r.data.entro) out.push({ r, due: r.data.entro }); continue; } if (r.kind === 'ricetta') { if (r.data.stato !== 'Comprata' && r.data.stato !== 'Non serve più' && r.data.scadenza) out.push({ r, due: r.data.scadenza }); continue; }
     const due = r.data.richiamo || r.data.prossime || r.data.prossima; if (due && due >= t) out.push({ r, due }); }
   for (const r of list(d, 'ricorrenza')) { const due = nextDue(d, r); if (due) out.push({ r, due }); }
   return out.sort((a, b) => a.due.localeCompare(b.due)).filter(x => { const k = x.r.kind + titleOf(x.r); return seen[k] ? false : (seen[k] = 1); });
@@ -400,7 +410,7 @@ function itemHTML(r, { swipe = !readonly } = {}) {
 const listHTML = (arr, empty = 'Ancora niente qui', opt) => `<div class="glass list">${arr.length ? arr.map(r => itemHTML(r, opt)).join('') : `<div class="empty">${empty}</div>`}</div>`;
 // sezioni richiudibili: si apre/chiude toccando il titolo, la scelta resta salvata
 const folds = new Set(LS.get('cani.fold', []));
-const SEC_IC = [[/ricette/i, '🧾'], [/pastiglie/i, '💊'], [/calendario/i, '🗓️'], [/giornata/i, '📝'], [/ricorrenti/i, '🔁'], [/terapia in corso/i, '🩺'], [/storia della terapia/i, '📜'], [/scorte/i, '📦'], [/arrivo/i, '🔔'], [/ultime voci/i, '🕘'], [/^crisi$/i, '⚡'], [/analisi/i, '🩸'], [/visit/i, '🩺'], [/vaccin/i, '💉'], [/problem/i, '🤒'], [/spes/i, '💶']];
+const SEC_IC = [[/da fare/i, '📌'], [/ricette/i, '🧾'], [/pastiglie/i, '💊'], [/calendario/i, '🗓️'], [/giornata/i, '📝'], [/ricorrenti/i, '🔁'], [/terapia in corso/i, '🩺'], [/storia della terapia/i, '📜'], [/scorte/i, '📦'], [/arrivo/i, '🔔'], [/ultime voci/i, '🕘'], [/^crisi$/i, '⚡'], [/analisi/i, '🩸'], [/visit/i, '🩺'], [/vaccin/i, '💉'], [/problem/i, '🤒'], [/spes/i, '💶']];
 const section = (title, body, extra = '') => {
   const key = title.replace(/<[^>]+>/g, '').trim(), shut = folds.has(key), ic = (SEC_IC.find(([re]) => re.test(key)) || [, '📅'])[1];
   return `<div class="sec${shut ? ' shut' : ''}" data-fold="${esc(key)}" role="button" onclick="if(!event.target.closest('button'))toggleFold(this)"><h3><span class="sec-ic">${/^[A-Za-zÀ-ÿ]/.test(key) && /^\d{4}$/.test(key.slice(-4)) ? '📅' : ic}</span>${title}<i class="chev">›</i></h3>${extra}</div><div class="fold-body${shut ? ' folded' : ''}"><div>${body}</div></div>`;
@@ -483,6 +493,7 @@ function viewHome() {
   h += homeTiles();
   if (!readonly) h += pillsCard();
   if (!readonly) h += dayLogCard();
+  h += todoCard();
   h += rxCard();
   h += recurringCard();
   h += section('Terapia in corso', therapyCards(dog));
@@ -1314,6 +1325,21 @@ view.addEventListener('input', e => {
   const q = $('#q'); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
 });
 
+// ---------- da fare / note ----------
+const openTodos = d => list(d, 'nota').filter(r => r.data.stato !== 'Fatto').sort((a, b) => (a.data.entro || '9').localeCompare(b.data.entro || '9') || (a.data.date || '').localeCompare(b.data.date || ''));
+function todoCard() {
+  const rs = openTodos(dog);
+  return section('Da fare', `<div class="glass list">${rs.length ? rs.map(r => {
+    const late = r.data.entro && r.data.entro <= today();
+    return `<div class="item" data-id="${r.id}"><div class="sc"><button class="todo-chk" data-todo="${r.id}" aria-label="Fatto"></button>
+      <div class="tx"><b class="wrap">${esc(r.data.testo || '')}</b><small class="${late ? 'late' : ''}">${[r.data.cani === 'entrambi' ? '🐾 entrambi' : '', r.data.entro ? (late ? '⚠️ ' : '') + 'entro ' + fmtDate(r.data.entro) : ''].filter(Boolean).join(' · ') || '&nbsp;'}</small></div></div></div>`;
+  }).join('') : '<div class="empty">Niente da fare 🎉</div>'}</div>`, readonly ? '' : `<button class="link" data-newtodo>＋ Aggiungi</button>`);
+}
+function markTodo(id) {
+  const r = records[id]; r.data = { ...r.data, stato: 'Fatto', fattoIl: today() }; save(r); navigator.vibrate?.(30);
+  toast('Fatto ✓', { label: 'Annulla', fn: () => { r.data = { ...r.data, stato: 'Da fare' }; delete r.data.fattoIl; save(r); } });
+}
+
 // ---------- ricette da comprare ----------
 const openRx = d => list(d, 'ricetta').filter(r => r.data.stato !== 'Comprata' && r.data.stato !== 'Non serve più');
 function rxCard() {
@@ -1539,6 +1565,8 @@ function exportExpenses(y) {
   shareFile(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `spese-cani-${y}.csv`);
 }
 view.addEventListener('click', e => {
+  const td = e.target.closest('[data-todo]'); if (td) { e.stopImmediatePropagation(); return markTodo(td.dataset.todo); }
+  if (e.target.closest('[data-newtodo]')) { e.stopImmediatePropagation(); return openForm('nota'); }
   const bo = e.target.closest('[data-bought]'); if (bo) { e.stopImmediatePropagation(); return markBought(bo.dataset.bought); }
   const dn = e.target.closest('[data-done]'); if (dn) { e.stopImmediatePropagation(); return markDone(dn.dataset.done); }
   const ld = e.target.closest('[data-logday]'); if (ld) { e.stopImmediatePropagation(); const n = dayAdd(logDay || today(), +ld.dataset.logday); logDay = n > today() ? today() : n; return render(); }
