@@ -116,7 +116,7 @@ const KINDS = {
     ic: '🧾', name: 'Ricetta',
     fields: [
       { k: '_scan', t: 'scan' },
-      { k: '_dog', l: 'Per quale cane', t: 'dogsel' },
+      { k: '_dog', l: 'Per quale cane', t: 'dogsel', both: true },
       { k: 'date', l: 'Data della ricetta', t: 'date' },
       { k: 'farmaco', l: 'Farmaco', t: 'text', list: 'farmaci' },
       { k: 'quantita', l: 'Quantità prescritta', t: 'text', ph: 'es. 2 confezioni' },
@@ -192,6 +192,11 @@ const KINDS = {
     sum: d => [d.peso && d.peso + ' kg', d.prossima && 'Prossima ' + fmtDate(d.prossima)].filter(Boolean).join(' · '),
   },
 };
+
+for (const [id, k] of Object.entries(KINDS)) {
+  if (k.hidden || id === 'crisi' || k.fields.some(f => f.t === 'dogsel')) continue;
+  k.fields.unshift({ k: '_dog', l: 'Per quale cane', t: 'dogsel', both: id !== 'analisi' });
+}
 
 // ---------- utilità ----------
 const $ = s => document.querySelector(s);
@@ -1464,6 +1469,7 @@ function markDone(id) {
   let made;
   if (kind) {
     const data = kind === 'vaccino' ? { date: t, nome: x.nome, note: [x.tipo, x.dose].filter(Boolean).join(' · ') } : kind === 'analisi' ? { date: t, tipo: x.nome } : { date: t, motivo: x.nome };
+    if (x.cani === 'entrambi') data.cani = 'entrambi';
     made = { id: uuid(), dog: r.dog, kind, data }; save(made);
   } else { r.data = { ...x, ultima: t }; save(r); }
   toast(`Segnato: ${x.nome} oggi`, { label: 'Annulla', fn: () => { if (made) { made.deleted = true; save(made); } else { r.data.ultima = x.ultima; save(r); } } });
