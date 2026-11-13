@@ -136,6 +136,7 @@ const KINDS = {
     ic: '💶', name: 'Spesa',
     fields: [
       { k: 'date', l: 'Giorno', t: 'date' },
+      { k: '_dog', l: 'Per quale cane', t: 'dogsel', both: true },
       { k: 'cosa', l: 'Cosa', t: 'text', ph: 'es. Visita di controllo, Phenoleptil' },
       { k: 'categoria', l: 'Categoria', t: 'select', o: ['Visita', 'Farmaci', 'Analisi', 'Vaccini', 'Antiparassitari', 'Chirurgia', 'Cibo', 'Toelettatura', 'Altro'] },
       { k: 'costo', l: 'Importo (€)', t: 'num', step: '0.01' },
@@ -144,7 +145,7 @@ const KINDS = {
       { k: 'note', l: 'Note', t: 'area' },
     ],
     title: d => d.cosa || d.categoria || 'Spesa',
-    sum: d => [d.costo != null && euro(d.costo), d.categoria].filter(Boolean).join(' · '),
+    sum: d => [d.costo != null && euro(d.costo), d.categoria, d.cani === 'entrambi' && '🐾 entrambi'].filter(Boolean).join(' · '),
   },
   ricorrenza: {
     ic: '🔁', name: 'Promemoria ricorrente', nodate: true,
@@ -247,7 +248,7 @@ function save(rec) {
   rec.updated = Date.now(); records[rec.id] = rec; pending.add(rec.id); persist(); render(); sync();
 }
 const list = (dog, kind) => Object.values(records)
-  .filter(r => !r.deleted && r.dog === dog && (kind ? r.kind === kind : !KINDS[r.kind]?.hidden))
+  .filter(r => !r.deleted && (r.dog === dog || r.data?.cani === 'entrambi') && (kind ? r.kind === kind : !KINDS[r.kind]?.hidden))
   .sort((a, b) => toDate(b.data.date, b.data.time) - toDate(a.data.date, a.data.time));
 
 
@@ -740,7 +741,7 @@ function fieldHTML(f, d) {
     case 'docs': return lab + `<div class="docs" data-docs>${[].concat(v || []).map(docThumb).join('')}<label class="doc-add">＋<input type="file" accept="image/*" multiple data-docfile hidden></label></div><input type="hidden" name="${f.k}" value="${esc(JSON.stringify([].concat(v || [])))}">`;
     case 'scan': return `<div class="scan"><label class="btn primary scan-btn">📷 Fotografa la ricetta<input type="file" accept="image/*" data-scan hidden></label>
       <button type="button" class="link" data-pastetxt>📋 Incolla testo</button><p id="scanMsg" class="small muted">Scatta una foto: leggo io farmaco, data, scadenza, numero e PIN.</p></div>`;
-    case 'dogsel': return lab + `<div class="seg3 dogsel">${DOGS.map(x => `<label><input type="radio" name="_dog" value="${x.id}"${(editing?.dog || dog) === x.id ? ' checked' : ''}><span>${avatar(x.id, 22)} ${esc(x.name)}</span></label>`).join('')}</div>`;
+    case 'dogsel': return lab + `<div class="seg3 dogsel">${DOGS.map(x => `<label><input type="radio" name="_dog" value="${x.id}"${d.cani !== 'entrambi' && (editing?.dog || dog) === x.id ? ' checked' : ''}><span>${avatar(x.id, 22)} ${esc(x.name)}</span></label>`).join('')}${f.both ? `<label><input type="radio" name="_dog" value="entrambi"${d.cani === 'entrambi' ? ' checked' : ''}><span>🐾 Entrambi</span></label>` : ''}</div>`;
     case 'wall': return lab + `<label class="wall-pick" style="${v ? `background-image:url('${esc(v)}')` : ''}">${v ? '' : '<b>🖼️ Scegli una foto</b>'}<input type="file" accept="image/*" data-wall hidden></label><div class="row" style="margin-top:6px"><span class="muted small" style="flex:1">Meglio una foto orizzontale con il cane a destra. Il testo resta leggibile a sinistra.</span>${v ? '<button type="button" class="link" data-wallrm>Togli</button>' : ''}</div><input type="hidden" name="${f.k}" value="${esc(v)}">`;
     case 'photo': return `<div class="photo-pick"><label class="ph">${v ? `<img src="${esc(v)}" alt="">` : '<b>📷</b>'}<input type="file" accept="image/*" data-photo hidden></label><span class="muted small">Tocca per scegliere una foto</span><input type="hidden" name="${f.k}" value="${esc(v)}"></div>`;
   }
@@ -795,7 +796,7 @@ $('#frm').addEventListener('submit', e => {
     if (f.t === 'dur') { const s = (+fd.get(f.k + 'Min') || 0) * 60 + (+fd.get(f.k + 'S') || 0); if (s) data[f.store || 'durSec'] = s; continue; }
     if (f.t === 'chips') { const a = fd.getAll(f.k); if (a.length) data[f.k] = a; continue; }
     if (f.t === 'scan') continue;
-    if (f.t === 'dogsel') { if (fd.get('_dog')) editing.dog = fd.get('_dog'); continue; }
+    if (f.t === 'dogsel') { const v = fd.get('_dog'); if (v === 'entrambi') data.cani = 'entrambi'; else if (v) editing.dog = v; continue; }
     if (f.t === 'docs') { const a = JSON.parse(fd.get(f.k) || '[]'); if (a.length) data[f.k] = a; continue; }
     const v = (fd.get(f.k) || '').trim();
     if (v) data[f.k] = f.t === 'num' || f.t === 'stars' ? +v : v;
@@ -1502,7 +1503,8 @@ function factorsCard() {
 // ---------- spese veterinarie ----------
 let spYear = null;
 const catOf = r => r.kind === 'spesa' ? r.data.categoria || 'Altro' : r.kind === 'visita' ? 'Visita' : r.kind === 'analisi' ? 'Analisi' : r.kind === 'vaccino' ? (/nexgard|frontline|advantix|effitix|stronghold|advocate|drontal|endogard|antiparass|collare|pipetta|milbemax|bravecto|simparica/i.test(r.data.nome || '') ? 'Antiparassitari' : 'Vaccini') : 'Farmaci';
-const expenses = dogs => Object.values(records).filter(r => !r.deleted && dogs.includes(r.dog) && +r.data.costo > 0).map(r => r.kind === 'ricetta' && r.data.acquisto ? { ...r, data: { ...r.data, date: r.data.acquisto } } : r);
+// spesa per entrambi: nel totale di un solo cane conta a metà, nel totale dei due cani conta intera
+const expenses = dogs => Object.values(records).filter(r => !r.deleted && (dogs.includes(r.dog) || r.data.cani === 'entrambi') && +r.data.costo > 0).map(r => r.data.cani === 'entrambi' && dogs.length === 1 ? { ...r, data: { ...r.data, costo: +r.data.costo / 2 } } : r).map(r => r.kind === 'ricetta' && r.data.acquisto ? { ...r, data: { ...r.data, date: r.data.acquisto } } : r);
 function expensesCard() {
   const mine = expenses([dog]), all = expenses(DOGS.map(d => d.id));
   const years = [...new Set(all.map(r => r.data.date.slice(0, 4)))].sort().reverse();
@@ -1526,7 +1528,7 @@ function expensesCard() {
 function exportExpenses(y) {
   const rs = expenses(DOGS.map(d => d.id)).filter(r => r.data.date.startsWith(y)).sort((a, b) => a.data.date.localeCompare(b.data.date));
   const cell = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const lines = [['Giorno', 'Cane', 'Categoria', 'Cosa', 'Dove', 'Importo (€)'].join(';'), ...rs.map(r => [fmtDate(r.data.date), DOGS.find(d => d.id === r.dog).name, catOf(r), titleOf(r), r.data.dove || '', String(r.data.costo).replace('.', ',')].map(cell).join(';')),
+  const lines = [['Giorno', 'Cane', 'Categoria', 'Cosa', 'Dove', 'Importo (€)'].join(';'), ...rs.map(r => [fmtDate(r.data.date), (r.data.cani === 'entrambi' ? DOGS.map(d => d.name).join(' e ') : DOGS.find(d => d.id === r.dog).name), catOf(r), titleOf(r), r.data.dove || '', String(r.data.costo).replace('.', ',')].map(cell).join(';')),
     ['', '', '', '', 'Totale', rs.reduce((a, r) => a + +r.data.costo, 0).toFixed(2).replace('.', ',')].join(';')];
   shareFile(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `spese-cani-${y}.csv`);
 }
